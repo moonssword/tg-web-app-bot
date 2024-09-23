@@ -1,5 +1,3 @@
-const https = require('https');
-const fs = require('fs');
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 const cors = require('cors');
@@ -8,10 +6,6 @@ require('dotenv').config();
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {polling: true});
 const webAppUrl = 'https://5084-5-251-196-243.ngrok-free.app';
 const app = express();
-
-const privateKey = fs.readFileSync('server.key', 'utf8');
-const certificate = fs.readFileSync('server.cert', 'utf8');
-const credentials = { key: privateKey, cert: certificate };
 
 app.use(express.json());
 app.use(cors());
@@ -76,8 +70,6 @@ app.post('/web-data', async (req, res) => {
     }
 })
 
-const httpsServer = https.createServer(credentials, app);
+const PORT = 8000;
 
-const PORT = 8443;
-
-httpsServer.listen(PORT, () => console.log('HTTPS server started on PORT ' + PORT));
+app.listen(PORT, () => console.log('server started on PORT ' + PORT))
