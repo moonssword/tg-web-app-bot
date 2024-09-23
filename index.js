@@ -53,14 +53,15 @@ bot.on('message', async (msg) => {
 });
 
 app.post('/web-data', async (req, res) => {
-    const {city, district, microdistrict, ...formValues } = req.body;
+    const {city } = req.body;
+    console.log('Received data:', req.body);
     try {
         await bot.answerWebAppQuery(queryId, {
             type: 'article',
             id: queryId,
             title: 'Успешная публикация',
             input_message_content: {
-                message_text: `Текст сообщения ${city}, ${district}, ${microdistrict}`
+                message_text: city
             }
         })
         return res.status(200).json({});
