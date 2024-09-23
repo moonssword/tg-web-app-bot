@@ -1,8 +1,14 @@
 const TelegramBot = require('node-telegram-bot-api');
+const express = require('express');
+const cors = require('cors');
 require('dotenv').config();
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {polling: true});
 const webAppUrl = 'https://5084-5-251-196-243.ngrok-free.app';
+const app = express();
+
+app.use(express.json());
+app.use(cors());
 
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
@@ -38,10 +44,31 @@ bot.on('message', async (msg) => {
             await bot.sendMessage(chatId, 'Ваши фото: ' + data?.photos);
 
             setTimeout(async () => {
-                await bot.sendMessage(chatId, 'Всю информацию вы получите в этом чате');
+                await bot.sendMessage(chatId, 'Отложенная отправка сообщения');
             }, 3000)
         } catch (e) {
             console.log(e);
         }
     }
 });
+
+app.post('/web-data', async (req, res) => {
+    const {queryId, products = [], totalPrice} = req.body;
+    try {
+        await bot.answerWebAppQuery(queryId, {
+            type: 'article',
+            id: queryId,
+            title: 'Успешная покупка',
+            input_message_content: {
+                message_text: `Текст сообщения ${totalPrice}, ${products.map(item => item.title).join(', ')}`
+            }
+        })
+        return res.status(200).json({});
+    } catch (e) {
+        return res.status(500).json({})
+    }
+})
+
+const PORT = 8000;
+
+app.listen(PORT, () => console.log('server started on PORT ' + PORT))
