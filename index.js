@@ -58,6 +58,7 @@ app.post('/web-data', async (req, res) => {
         await bot.answerWebAppQuery(queryId, {
             type: 'article',
             id: queryId,
+            title: 'Успешная публикация',
             input_message_content: {
                 message_text: `Текст сообщения ${city}, ${district}, ${microdistrict}`
             }
