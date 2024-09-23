@@ -1,5 +1,3 @@
-const https = require('https');
-const fs = require('fs');
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 const cors = require('cors');
@@ -8,10 +6,6 @@ require('dotenv').config();
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {polling: true});
 const webAppUrl = 'https://5084-5-251-196-243.ngrok-free.app';
 const app = express();
-
-const privateKey = fs.readFileSync('path/to/your/server.key', 'utf8');
-const certificate = fs.readFileSync('path/to/your/server.cert', 'utf8');
-const credentials = { key: privateKey, cert: certificate };
 
 app.use(express.json());
 app.use(cors());
@@ -22,15 +16,6 @@ bot.on('message', async (msg) => {
 
     if (text === '/start') {
         await bot.sendMessage(chatId, 'Привет! Нажмите кнопку ниже, чтобы разместить объявление.', {
-            reply_markup: {
-                keyboard: [
-                    [{ text: 'Разместить объявление', web_app: { url: webAppUrl + '/form' } }]
-                ],
-                resize_keyboard: true
-            }
-        });
-
-        await bot.sendMessage(chatId, 'Привет! Нажмите кнопку, чтобы разместить объявление.', {
             reply_markup: {
                 inline_keyboard: [
                     [{ text: 'Разместить объявление', web_app: { url: webAppUrl + '/form' } }]
@@ -59,25 +44,97 @@ bot.on('message', async (msg) => {
 });
 
 app.post('/web-data', async (req, res) => {
-    const {queryId, city } = req.body;
+    const {
+        queryId, 
+        dishwasher,
+        district,
+        duration,
+        family,
+        floor_current,
+        floor_total,
+        fridge,
+        house_type,
+        iron,
+        kitchen,
+        max_guests,
+        microdistrict,
+        microwave,
+        phone,
+        price,
+        rooms,
+        separate_toilet,
+        shower,
+        single,
+        sleeping_places,
+        smoke_allowed,
+        stove,
+        telegram,
+        tg_username,
+        tv,
+        wardrobe,
+        washing_machine,
+        wifi,
+        with_child,
+        with_pets
+    } = req.body;
+
     console.log('Received data:', req.body);
+    
     try {
-        await bot.answerWebAppQuery(queryId, {
+        const message = `
+🏠 *Характеристики жилья*:
+- Тип жилья: ${house_type === 'apartment' ? 'Квартира' : house_type}
+- Адрес: г.${city}, ${district} р-н, мкрн.${microdistrict}
+- Этаж: ${floor_current}/${floor_total}
+- Срок аренды: ${duration === 'long_time' ? 'Долгосрочная' : 'Краткосрочная'}
+- Цена: ${price} KZT
+- Телефон: ${phone}
+- Telegram: @${telegram ? tg_username : 'Не указано'}
+
+👨‍👩‍👦 *Удобства*:
+${fridge ? '🧊 Холодильник: Да\n' : ''}
+${washing_machine ? '🧺 Стиральная машина: Да\n' : ''}
+${microwave ? '🍲 Микроволновка: Да\n' : ''}
+${dishwasher ? '🍽 Посудомоечная машина: Да\n' : ''}
+${iron ? '👕 Утюг: Да\n' : ''}
+${tv ? '📺 Телевизор: Да\n' : ''}
+${wifi ? '🌐 Wi-Fi: Да\n' : ''}
+${stove ? '🔥 Плита: Да\n' : ''}
+${kitchen ? '🍴 Кухня: Да\n' : ''}
+${wardrobe ? '👗 Гардероб: Да\n' : ''}
+${shower ? '🚿 Душ: Да\n' : ''}
+${separate_toilet ? '🚽 Разд. санузел: Да\n' : ''}
+${sleeping_places ? '🛏 Спальные места: Да\n' : ''}
+
+👥 *Дополнительно*:
+${family ? '👪 Для семьи: Да\n' : ''}
+${single ? '👤 Для одного: Да\n' : ''}
+${with_child ? '👶 С детьми: Да\n' : ''}
+${with_pets ? '🐾 С животными: Да\n' : ''}
+${smoke_allowed ? '🚬 Курение: Да\n' : ''}
+${max_guests ? `👥 Макс. гостей: ${max_guests}\n` : ''}
+`;
+
+        //await saveToDatabase(data); // Сохраняем данные в базу
+        
+        await bot.answerWebAppQuery(queryId, {  // Отправляем сообщение в Telegram
             type: 'article',
             id: queryId,
             title: 'Успешная публикация',
             input_message_content: {
-                message_text: city
+                message_text: message,
+                parse_mode: 'Markdown'
             }
-        })
+        });
+
         return res.status(200).json({});
     } catch (e) {
-        return res.status(500).json({})
+        console.log('Error:', e);
+        return res.status(500).json({});
     }
-})
+});
 
-const httpsServer = https.createServer(credentials, app);
 
-const PORT = 443;
+const PORT = 8000;
 
-httpsServer.listen(PORT, () => console.log('HTTPS server started on PORT ' + PORT));
+app.listen(PORT, () => console.log('server started on PORT ' + PORT))
