@@ -53,7 +53,7 @@ bot.on('message', async (msg) => {
 });
 
 app.post('/web-data', async (req, res) => {
-    const {city } = req.body;
+    const {queryId, city } = req.body;
     console.log('Received data:', req.body);
     try {
         await bot.answerWebAppQuery(queryId, {
