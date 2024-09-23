@@ -4,7 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {polling: true});
-const webAppUrl = 'https://5084-5-251-196-243.ngrok-free.app';
+const webAppUrl = 'http://5084-5-251-196-243.ngrok-free.app';
 const app = express();
 
 app.use(express.json());
