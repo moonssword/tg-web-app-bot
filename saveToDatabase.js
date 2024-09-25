@@ -33,6 +33,7 @@ async function saveToDatabase(data) {
         tv,
         wardrobe,
         washing_machine,
+        whatsapp,
         wifi,
         with_child,
         with_pets
@@ -44,7 +45,7 @@ async function saveToDatabase(data) {
             fridge, house_type, iron, kitchen, max_guests, microdistrict, 
             microwave, phone, price, rooms, separate_toilet, shower, 
             single, sleeping_places, smoke_allowed, stove, telegram, 
-            tg_username, tv, wardrobe, washing_machine, wifi, 
+            tg_username, tv, wardrobe, washing_machine, whatsapp, wifi, 
             with_child, with_pets
         ) 
         VALUES (
@@ -52,7 +53,7 @@ async function saveToDatabase(data) {
             $7, $8, $9, $10, $11, $12, 
             $13, $14, $15, $16, $17, $18, 
             $19, $20, $21, $22, $23, $24, 
-            $25, $26, $27, $28, $29, $30
+            $25, $26, $27, $28, $29, $30, $31
         )
         RETURNING id;
     `;
@@ -62,7 +63,7 @@ async function saveToDatabase(data) {
         fridge, house_type, iron, kitchen, max_guests, microdistrict, 
         microwave, phone, price, rooms, separate_toilet, shower, 
         single, sleeping_places, smoke_allowed, stove, telegram, 
-        tg_username, tv, wardrobe, washing_machine, wifi, 
+        tg_username, tv, wardrobe, washing_machine, whatsapp, wifi, 
         with_child, with_pets
     ];
 
