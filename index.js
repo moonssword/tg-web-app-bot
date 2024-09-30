@@ -1,9 +1,10 @@
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
+const config = require('./config');
+const { createNewUser, saveADtoDB, checkCurrentDayAD, updateADpostedDate, saveSearchCritireaToDB } = require('./db-manager');
 
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {polling: true});
+const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, {polling: true});
 const app = express();
 
 app.use(express.json());
@@ -15,16 +16,18 @@ let photoTimers = {};
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const text = msg.text;
-    const webAppUrl = `https://5084-5-251-196-243.ngrok-free.app/form?chat_id=${msg.chat.id}`;
+    const webAppUrl = `https://5b06-5-251-196-243.ngrok-free.app/form?chat_id=${chatId}`;
 
     if (text === '/start') {
-        await bot.sendMessage(chatId, 'Привет! Нажмите кнопку ниже, чтобы разместить объявление.', {
+        await createNewUser(msg.from.id, msg.from.username, msg.from.first_name, !!msg.from.is_premium)
+        const sentMessage = await bot.sendMessage(chatId, 'Добро пожаловать! Для размещения объявления на канале перейдите на форму ⬇️', {
             reply_markup: {
                 inline_keyboard: [
-                    [{ text: 'Разместить объявление', web_app: { url: webAppUrl} }]
+                    [{ text: '🔸Разместить объявление🔸', web_app: { url: webAppUrl} }]
                 ]
             }
         });
+        await bot.pinChatMessage(chatId, sentMessage.message_id);
     }
 
     if (msg.media_group_id || msg.photo) {
@@ -33,7 +36,7 @@ bot.on('message', async (msg) => {
         const fileId = largestPhoto.file_id;
 
         if (!adsData[chatId]) {
-            adsData[chatId] = { photos: [] };
+            adsData[chatId] = { photos: [], photoURLs: [] };
         }
 
         if (adsData[chatId].photos.length < 10) {
@@ -44,9 +47,11 @@ bot.on('message', async (msg) => {
             clearTimeout(photoTimers[chatId]);
         }
 
+        savePhotoIDsToDB(chatId, fileId);
+
         // Устанавливаем новый таймер
         photoTimers[chatId] = setTimeout(() => {
-            // Когда таймер завершится, вызываем approvePhotoAD
+
             if (adsData[chatId].photos.length === 10) {
                 approveAD(adsData[chatId], chatId);
             } else {
@@ -63,114 +68,112 @@ bot.on('callback_query', async (callbackQuery) => {
     const messageId = callbackQuery.message.message_id;
     const userId = callbackQuery.from.id;
     const data = callbackQuery.data;
+    const currentPhotosCount = 10 - adsData[chatId]?.photos?.length;
+
+    const hasPostedToday = await checkCurrentDayAD(userId);
 
     try {
-        if (data === 'approved') {
-            if (adsData[chatId].photos && adsData[chatId].message) {
-                postADtoChannel(adsData[chatId], chatId);
-            }
-        } else if (data === 'add_photo') {
-            await bot.sendMessage(chatId, '⬆️ Добавьте до 10 фотографий или опубликуйте объявление на канале');
+        switch(data) {
+            case 'approved':
+                if (!hasPostedToday && adsData[chatId].photos && adsData[chatId].message) {
+                    const adId = await saveADtoDB(adsData[chatId].data, adsData[chatId].photoURLs, messageId);
+                    postADtoChannel(adsData[chatId], chatId);
+                    updateADpostedDate(adId);
+                    await bot.deleteMessage(chatId, messageId);
+                } else {
+                    await saveADtoDB(adsData[chatId].data, adsData[chatId].photoURLs, messageId);
+                    await bot.sendMessage(chatId, 'Вы уже публиковали объявление сегодня. Новое объявление сохранено и может быть опубликовано завтра.');
+                    await bot.deleteMessage(chatId, messageId);
+                }
+                break;
+            case 'add_photo':
+                if (adsData[chatId].photos && adsData[chatId].message) {
+                    await bot.sendMessage(chatId, `⬆️ Можете отправить еще ${currentPhotosCount} фотографий`);
+                }
+                break;
         }
     } catch (err) {
         console.error('Ошибка:', err);
-        bot.sendMessage(chatId, 'Произошла ошибка при обработке колбэк-данных.');
+        bot.sendMessage(chatId, 'Произошла ошибка при обработке. Пожалуйста, повторите попытку.');
       }
 });
 
 app.post('/web-data', async (req, res) => {
-    const {
-        chatId,
-        queryId,
-        city,
-        dishwasher,
-        district,
-        duration,
-        family,
-        floor_current,
-        floor_total,
-        fridge,
-        house_type,
-        iron,
-        kitchen,
-        max_guests,
-        microdistrict,
-        microwave,
-        phone,
-        price,
-        rooms,
-        separate_toilet,
-        shower,
-        single,
-        sleeping_places,
-        smoke_allowed,
-        stove,
-        telegram,
-        tg_username,
-        tv,
-        wardrobe,
-        washing_machine,
-        whatsapp,
-        wifi,
-        with_child,
-        with_pets
-    } = req.body;
-
-    console.log('Received data:', req.body);
-    
+    const data = req.body;
+    //console.log('Received data:', JSON.stringify(data));
     try {
         const message = `
-🏠 *Характеристики жилья*:
-- Тип жилья: ${house_type === 'apartment' ? 'Квартира' : house_type}
-- Адрес: г.${city}, ${district} р-н, ${microdistrict}
-- Этаж: ${floor_current}/${floor_total}
-- Срок аренды: ${duration === 'long_time' ? 'Долгосрочная' : 'Краткосрочная'}
-- Цена: ${price} KZT
-- Телефон: ${phone}
-- [WhatsApp](https://api.whatsapp.com/send?phone=${phone}&text=Здравствуйте!)
-- [Telegram](https://t.me/${tg_username})
-
-👨‍👩‍👦 *Удобства*:
-- Холодильник: ${fridge ? 'Да' : 'Нет'}
-- Стиральная машина: ${washing_machine ? 'Да' : 'Нет'}
-- Микроволновка: ${microwave ? 'Да' : 'Нет'}
-- Посудомоечная машина: ${dishwasher ? 'Да' : 'Нет'}
-- Утюг: ${iron ? 'Да' : 'Нет'}
-- Телевизор: ${tv ? 'Да' : 'Нет'}
-- Wi-Fi: ${wifi ? 'Да' : 'Нет'}
-- Плита: ${stove ? 'Да' : 'Нет'}
-- Кухня: ${kitchen ? 'Да' : 'Нет'}
-- Гардероб: ${wardrobe ? 'Да' : 'Нет'}
-- Душ: ${shower ? 'Да' : 'Нет'}
-- Раздельный санузел: ${separate_toilet ? 'Да' : 'Нет'}
-- Спальные места: ${sleeping_places ? 'Да' : 'Нет'}
-
-👥 *Дополнительно*:
-- Для семьи: ${family ? 'Да' : 'Нет'}
-- Для одного: ${single ? 'Да' : 'Нет'}
-- Можно с детьми: ${with_child ? 'Да' : 'Нет'}
-- Можно с животными: ${with_pets ? 'Да' : 'Нет'}
-- Курение разрешено: ${smoke_allowed ? 'Да' : 'Нет'}
-- Максимальное количество гостей: ${max_guests}
+🏠 *Сдается* ${data.house_type === 'apartment' ? data.rooms + '-комн.квартира' : data.house_type === 'room' ? 'комната' : 'дом'} ${data.duration === 'long_time' ? 'на длительный срок' : 'посуточно'}, ${data.area} м², ${data.floor_current}/${data.floor_total} этаж
+*Адрес:* г.${data.city}, ${data.district} р-н, ${data.microdistrict}, ${data.address}
+*Сдает:* ${data.author === 'owner' ? 'собственник': 'посредник'}
+*Цена:* ${data.price} ${data.currency}
+*Депозит:* ${data.deposit ? `${data.deposit_value}%` : 'нет'}
+*Телефон:* ${data.phone} ${[ data.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${data.phone})` : '', data.tg_username ? `[Telegram](https://t.me/${data.tg_username})` : ''].filter(Boolean).join(' ')}
+🛋️ *Удобства*: ${[
+    data.fridge ? 'холодильник' : '',
+    data.washing_machine ? 'стиральная машина' : '',
+    data.microwave ? 'микроволновая печь' : '',
+    data.dishwasher ? 'посудомоечная машина' : '',
+    data.iron ? 'утюг' : '',
+    data.tv ? 'телевизор' : '',
+    data.wifi ? 'Wi-Fi' : '',
+    data.stove ? 'плита' : '',
+    data.shower ? 'душ' : '',
+    data.separate_toilet ? 'раздельный санузел' : '',
+    data.bed_linen ? 'постельное белье' : '',
+    data.towels ? 'полотенца' : '',
+    data.hygiene_items ? 'средства гигиены' : '',
+    data.kitchen ? 'кухня' : '',
+    data.wardrobe ? 'хранение одежды' : '',
+    data.sleeping_places ? 'спальные места' : ''
+].filter(Boolean).join(', ')}
+📜 *Правила заселения*: ${[
+    data.family ? 'для семьи' : '',
+    data.single ? 'для одного' : '',
+    data.with_child ? 'можно с детьми' : '',
+    data.with_pets ? 'можно с животными' : '',
+    data.max_guests ? `макс. гостей: ${data.max_guests}` : ''
+].filter(Boolean).join(', ')}
+📝 *Описание*
+${data.description}
 `;
 
-
-        //await saveToDatabase(data); // Сохраняем данные в базу
-        
-        adsData[chatId] = {
+        adsData[data.chatId] = {
+            data: data,
             message,
-            photos: []
+            photos: [],
+            photoURLs: []
         };
 
-        await bot.answerWebAppQuery(queryId, {  // Отправляем сообщение в Telegram
-            type: 'article',
-            id: queryId,
-            title: 'Успешная публикация',
-            input_message_content: {
-                message_text: 'Мы получили ваше объявление, осталось добавить фотографии. Пожалуйста, прикрепите до 10 фотографий',
-                parse_mode: 'Markdown'
-            }
-        });
+        if (data.ad_type === 'rentOut') {
+            await bot.answerWebAppQuery(data.queryId, {
+                type: 'article',
+                id: data.queryId,
+                title: 'Успешная публикация',
+                input_message_content: {
+                    message_text: '📝 Текст объявления успешно создан',
+                    parse_mode: 'Markdown'
+                }
+            });
+
+            await bot.sendMessage(data.chatId, '⚠️ Для завершения публикации, пожалуйста, отправьте до 10 фотографий')
+            
+        } else if (data.ad_type === 'rentIn') {
+            await bot.answerWebAppQuery(data.queryId, {
+                type: 'article',
+                id: data.queryId,
+                title: 'Успешная публикация',
+                input_message_content: {
+                    message_text: 'Вы будете получать уведомления о подходящих вариантах',
+                    parse_mode: 'Markdown'
+                }
+            });
+
+            saveSearchCritireaToDB(data); // Сохраняем поиск в бд
+            
+            await bot.sendMessage(data.chatId, 'Уважаемый пользователь, в данный момент размещение объявлений о поиске жилья на канале не предусмотрено. Однако вы можете получать уведомления о появлении в базе подходящих вариантов жилья.')
+        }
+
 
         return res.status(200).json({});
     } catch (e) {
@@ -184,70 +187,41 @@ const PORT = 8000;
 
 app.listen(PORT, () => console.log('server started on PORT ' + PORT))
 
+// Функция для публикации
 async function postADtoChannel(ad, chatId) {
-    const trimmedMessage = ad.message?.length > 1024 
-        ? ad.message.substring(0, ad.message.lastIndexOf(' ', 1024)) + '...' 
-        : ad.message;
-
-    const mediaGroup = ad.photos.map((fileId, index) => ({
-        type: 'photo',
-        media: fileId,
-        caption: index === 0 ? trimmedMessage : '',
-        parse_mode: 'Markdown'
-    }));
-
-    const messageOnChannel = await bot.sendMediaGroup(process.env.TELEGRAM_CHANNEL, mediaGroup);
+    const mediaGroup = await createMediaGroup(ad);
+    const messageOnChannel = await bot.sendMediaGroup(config.TELEGRAM_CHANNEL, mediaGroup);
     const messageId = messageOnChannel[0].message_id;
-    const messageLink = `https://t.me/${process.env.TELEGRAM_CHANNEL.replace('@', '')}/${messageId}`;
-    await bot.sendMessage(chatId, `Ваше [объявление](${messageLink}) опубликовано на канале`, {parse_mode: 'Markdown'});
+    const messageLink = `https://t.me/${config.TELEGRAM_CHANNEL.replace('@', '')}/${messageId}`;
+    await bot.sendMessage(chatId, `Ваше [объявление](${messageLink}) успешно опубликовано!`, {parse_mode: 'Markdown'});
 
     console.log(`Объявление опубликовано на канале`);
 }
 
+// Функция для публикации (до 10 фотографий)
 async function approvePhotoAD(ad, chatId) {
-    const trimmedMessage = ad.message?.length > 1024 
-        ? ad.message.substring(0, ad.message.lastIndexOf(' ', 1024)) + '...' 
-        : ad.message;
-
-    const mediaGroup = ad.photos.map((fileId, index) => {
-        return {
-            type: 'photo',
-            media: fileId,
-            caption: index === 0 ? trimmedMessage : '',
-            parse_mode: 'Markdown',
-        };
-    });
+    const currentPhotosCount = 10 - adsData[chatId].photos.length;
+    const mediaGroup = await createMediaGroup(ad);
 
     await bot.sendMediaGroup(chatId, mediaGroup);
 
-    await bot.sendMessage(chatId, '⬆️ Добавьте до 10 фотографий или опубликуйте объявление на канале', {
+    await bot.sendMessage(chatId, `⬆️ Вы можете добавить еще ${currentPhotosCount} фотографии или опубликовать объявление`, {
             reply_markup: {
               inline_keyboard: [
                 [{ text: '✅Опубликовать', callback_data: 'approved' }, { text: '↩️Добавить фото', callback_data: 'add_photo' }],
               ],
             },
           });
-
     console.log('Согласование публикации и добавления фотографий');
 }
 
+// Функция для публикации (10 фотографий)
 async function approveAD(ad, chatId) {
-    const trimmedMessage = ad.message?.length > 1024 
-        ? ad.message.substring(0, ad.message.lastIndexOf(' ', 1024)) + '...' 
-        : ad.message;
-
-    const mediaGroup = ad.photos.map((fileId, index) => {
-        return {
-            type: 'photo',
-            media: fileId,
-            caption: index === 0 ? trimmedMessage : '',
-            parse_mode: 'Markdown',
-        };
-    });
+    const mediaGroup = await createMediaGroup(ad);
 
     await bot.sendMediaGroup(chatId, mediaGroup);
 
-    await bot.sendMessage(chatId, '⬆️ Добавьте до 10 фотографий или опубликуйте объявление на канале', {
+    await bot.sendMessage(chatId, 'Нажмите "Опубликовать" для отправки объявления на канал', {
             reply_markup: {
               inline_keyboard: [
                 [{ text: '✅Опубликовать', callback_data: 'approved' }],
@@ -256,4 +230,28 @@ async function approveAD(ad, chatId) {
           });
 
     console.log('Согласование публикации');
+}
+
+async function createMediaGroup(ad, includeCaption = true) {
+    const trimmedMessage = ad.message?.length > 1024 
+        ? ad.message.substring(0, ad.message.lastIndexOf(' ', 1024)) + '...' 
+        : ad.message;
+
+    return ad.photos.map((fileId, index) => ({
+        type: 'photo',
+        media: fileId,
+        caption: includeCaption && index === 0 ? trimmedMessage : '',
+        parse_mode: 'Markdown'
+    }));
+}
+
+async function savePhotoIDsToDB(chatId, fileId) {
+
+        //const photoUrl = await getPhotoUrl(fileId);
+        adsData[chatId].photoURLs.push(fileId);
+}
+
+async function getPhotoUrl(fileId) {
+    const file = await bot.getFile(fileId);
+    return `https://api.telegram.org/file/bot${config.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
 }
