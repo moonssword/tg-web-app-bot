@@ -406,4 +406,15 @@ async function deactivateSC(id) {
     }
 }
 
-module.exports = { createNewUser, saveADtoDB, updateADpostedData, checkCurrentDayAD, saveSearchCritireaToDB, checkForNewAds, deactivateAd, deactivateSC };
+const dbManager = {
+    createNewUser,
+    saveADtoDB,
+    checkCurrentDayAD,
+    updateADpostedData,
+    saveSearchCritireaToDB,
+    checkForNewAds,
+    deactivateAd,
+    deactivateSC,
+  };
+  
+  module.exports = dbManager;

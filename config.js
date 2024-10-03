@@ -9,5 +9,10 @@ module.exports = {
         database: process.env.DB_DATABASE,
         password: process.env.DB_PASSWORD,
         port: process.env.DB_PORT,
+    },
+    cityChannels: {
+        'Алматы': '@testtest123422dsdfv',
+        'Астана': '@qertqertqert',
+        'Шымкент': '@channel_shymkent',
     }
 };
