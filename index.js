@@ -4,6 +4,37 @@ const cors = require('cors');
 const config = require('./config');
 const dbManager = require('./db-manager');
 const cron = require('node-cron');
+const winston = require('winston');
+const fs = require('fs');
+const path = require('path');
+
+const logDir = './logs';
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir);
+}
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp({
+      format: 'YYYY-MM-DD HH:mm:ss'
+    }),
+    winston.format.printf(({ timestamp, level, message }) => {
+      return `${timestamp} ${level}: ${message}`;
+    })
+  ),
+  transports: [
+    new winston.transports.File({ filename: path.join(logDir, 'error.log'), level: 'error' }),
+    new winston.transports.File({ filename: path.join(logDir, 'combined.log') })
+  ]
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error);
+});
 
 const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, {polling: true});
 const app = express();
@@ -17,7 +48,11 @@ let photoTimers = {};
 // Запускаем задачу оповещения каждые 10 минут
 cron.schedule('*/10 * * * *', async () => { 
     console.log('Starting notification schedule')
-    await dbManager.checkForNewAds(bot);
+    try {
+        await dbManager.checkForNewAds(bot);
+    } catch (error) {
+        logger.error(`Error during notification schedule: ${error}`);
+    }
 });
 
 bot.on('message', async (msg) => {
@@ -66,11 +101,12 @@ bot.on('message', async (msg) => {
                 } else {
                     approvePhotoAD(adsData[chatId], chatId);
                 }
-                delete photoTimers[chatId]; // Удаляем таймер после завершения
+                delete photoTimers[chatId];
             }, 2000);
         }
     } catch (err) {
         console.error('Ошибка:', err);
+        logger.error(`Error processing message from ${chatId}: ${err}`);
         bot.sendMessage(chatId, 'Произошла ошибка при обработке. Пожалуйста, повторите попытку.');
       }
 });
@@ -95,7 +131,7 @@ bot.on('callback_query', async (callbackQuery) => {
                 bot.sendMessage(chatId, `Пожалуйста, подпишитесь на канал ${targetChannel} для продолжения`);
                 return;
             }
-            
+
             if (adsData[chatId].photos && adsData[chatId].message) {
                 const adId = await dbManager.saveADtoDB(adsData[chatId].data, adsData[chatId].photoURLs);
                 const channelMessageId = await postADtoChannel(adsData[chatId], chatId, targetChannel);
@@ -150,6 +186,7 @@ bot.on('callback_query', async (callbackQuery) => {
         }
     } catch (err) {
         console.error('Ошибка:', err);
+        logger.error(`Error processing callback query from ${chatId}: ${err}`);
         bot.sendMessage(chatId, 'Произошла ошибка при обработке. Пожалуйста, повторите попытку.');
       }
 });
@@ -249,6 +286,7 @@ const message_rentIn = `
         return res.status(200).json({});
     } catch (e) {
         console.log('Error:', e);
+        logger.error(`Error processing callback query from ${chatId}: ${e}`);
         return res.status(500).json({});
     }
 });
@@ -258,6 +296,7 @@ const PORT = 8000;
 
 app.listen(PORT, () => {
     console.log(`Server started on PORT ${PORT} at ${new Date().toLocaleString()}`);
+    logger.info(`Server started on PORT ${PORT} at ${new Date().toLocaleString()}`);
   });
 
 // Функция для публикации

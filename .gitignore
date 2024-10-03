@@ -3,3 +3,5 @@
 /media
 .DB.sql
 .config.js
+/logs
+/Dockerfile
