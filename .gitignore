@@ -5,3 +5,5 @@
 .config.js
 /logs
 /Dockerfile
+.dockerignore
+docker-compose.yml
