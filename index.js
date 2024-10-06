@@ -7,6 +7,8 @@ const cron = require('node-cron');
 const winston = require('winston');
 const fs = require('fs');
 const path = require('path');
+const bodyParser = require('body-parser');
+const crypto = require('crypto');
 
 const logDir = './logs';
 if (!fs.existsSync(logDir)) {
