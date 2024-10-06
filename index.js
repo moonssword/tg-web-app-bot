@@ -41,6 +41,7 @@ const app = express();
 
 app.use(express.json());
 app.use(cors());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 let adsData = {};
 let photoTimers = {};
@@ -297,8 +298,22 @@ const message_rentIn = `
     }
 });
 
+// Эндпоинт для проверки пользователя
+app.get('/userIsValid', (req, res) => {
+    const { hash, checkDataString } = req.query;
 
-const PORT = 8000;
+    const secretKey = crypto.createHmac('sha256', BOT_TOKEN + "WebAppData").digest('hex');
+
+    const calculatedHash = crypto.createHmac('sha256', secretKey).update(checkDataString).digest('hex');
+
+    if (calculatedHash === hash) {
+        return res.json({ result: true });
+    } else {
+        return res.json({ result: false });
+    }
+});
+
+const PORT = config.PORT;
 
 app.listen(PORT, () => {
     console.log(`Server started on PORT ${PORT} at ${new Date().toLocaleString()}`);

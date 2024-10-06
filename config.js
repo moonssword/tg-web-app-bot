@@ -4,6 +4,7 @@ module.exports = {
     TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
     TELEGRAM_CHANNEL: process.env.TELEGRAM_CHANNEL,
     DOMAIN: process.env.DOMAIN,
+    PORT: process.env.PORT,
     DB_CONFIG: {
         user: process.env.DB_USER,
         host: process.env.DB_HOST,
