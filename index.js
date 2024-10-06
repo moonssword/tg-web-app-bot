@@ -304,10 +304,10 @@ const message_rentIn = `
 app.get('/userIsValid', (req, res) => {
     const { hash, checkDataString } = req.query;
 
-    const secretKey = crypto.createHmac('sha256', BOT_TOKEN + "WebAppData").digest('hex');
+    const secretKey = crypto.createHmac('sha256', config.TELEGRAM_BOT_TOKEN + "WebAppData").digest('hex');
 
     const calculatedHash = crypto.createHmac('sha256', secretKey).update(checkDataString).digest('hex');
-
+    console.log(req.query)
     if (calculatedHash === hash) {
         return res.json({ result: true });
     } else {
