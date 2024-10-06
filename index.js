@@ -295,7 +295,7 @@ const message_rentIn = `
         return res.status(200).json({});
     } catch (e) {
         console.log('Error:', e);
-        logger.error(`Error processing callback query from ${chatId}: ${e}`);
+        logger.error(`Error processing callback query from ${data.chatId}: ${e}`);
         return res.status(500).json({});
     }
 });
@@ -380,8 +380,8 @@ async function approveAD(ad, chatId) {
 }
 
 async function createMediaGroup(ad, includeCaption = true) {
-    const trimmedMessage = ad.message?.length > 1024 
-        ? ad.message.substring(0, ad.message.lastIndexOf(' ', 1024)) + '...' 
+    const trimmedMessage = ad.message?.length > 400 
+        ? ad.message.substring(0, ad.message.lastIndexOf(' ', 400)) + '...' 
         : ad.message;
 
     return ad.photos.map((fileId, index) => ({
