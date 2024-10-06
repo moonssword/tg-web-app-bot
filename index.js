@@ -195,9 +195,15 @@ app.post('/web-data', async (req, res) => {
     const data = req.body;
     const hasPostedToday = await dbManager.checkCurrentDayAD(data.user.id);
     //console.log('Received data:', JSON.stringify(data));
+
+    const roomTypeText = (data.room_type === 'room' ? '' : data.room_type === 'bed_space' ? ' (койко-место)' : '');
+    const roomLocationText = data.room_location === 'apartment' ? '' : 
+                             data.room_location === 'hostel' ? 'в хостеле' : 
+                             data.room_location === 'hotel' ? 'в гостинице' : '';
+
     try {
         const message = `
-🏠 *Сдается* ${data.house_type === 'apartment' ? data.rooms + '-комн.квартира' : data.house_type === 'room' ? 'комната' : 'дом'} ${data.duration === 'long_time' ? 'на длительный срок' : 'посуточно'}, ${data.area} м², ${data.floor_current}/${data.floor_total} этаж${data.bed_capacity ? ', спальных мест - ' + data.bed_capacity : ''}
+🏠 *Сдается* ${data.house_type === 'apartment' ? data.rooms + '-комн.квартира' : data.house_type === 'room' ? 'комната' + roomTypeText + (roomLocationText ? ' ' + roomLocationText : '') : 'дом'} ${data.duration === 'long_time' ? 'на длительный срок' : 'посуточно'}, ${data.area} м², ${data.floor_current}/${data.floor_total} этаж${data.bed_capacity ? ', спальных мест - ' + data.bed_capacity : ''}
 *Адрес:* г.${data.city}, ${data.district} р-н, ${data.microdistrict}, ${data.address}
 *Сдает:* ${data.author === 'owner' ? 'собственник': 'посредник'}
 *Цена:* ${data.price} ₸
