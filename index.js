@@ -59,7 +59,7 @@ bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     const text = msg.text;
-    const webAppUrl = `https://5b06-5-251-196-243.ngrok-free.app/form?chat_id=${chatId}`;
+    const webAppUrl = `https://bot.fatir.su/form?chat_id=${chatId}`;
 
     try {
         if (text === '/start') {
@@ -172,7 +172,7 @@ bot.on('callback_query', async (callbackQuery) => {
             const channelMessageId = callbackData.split('_')[2];
             await bot.deleteMessage(targetChannel, channelMessageId);
             await bot.answerCallbackQuery(callbackQuery.id, {text: '✅ Ваше объявление успешно удалено из канала', show_alert: false});
-            await bot.sendMessage(chatId, '✅ Ваше объявление успешно удалено из канала');
+            await bot.sendMessage(chatId, '✅ Ваше объявление удалено из канала');
             await dbManager.deactivateAd(channelMessageId);
             //await bot.deleteMessage(chatId, messageId);
 
@@ -259,7 +259,7 @@ const message_rentIn = `
             if (hasPostedToday.canPost) {
                 await bot.sendMessage(data.chatId, '📸 Для продолжения, пожалуйста, отправьте фотографии жилья (до 10 шт.)');
             } else {
-                await bot.sendMessage(data.chatId, `⚠️ Разрешена публикация одного объявления в день!\nСледующая публикация возможна в ${hasPostedToday.availableToPostDate}`);
+                await bot.sendMessage(data.chatId, `⚠️ Разрешена публикация одного объявления в день!\nСледующее объявление может быть размещено ${hasPostedToday.availableToPostDate}`);
             }
             
         } else if (data.ad_type === 'rentIn') {
@@ -273,7 +273,7 @@ const message_rentIn = `
                 }
             });
             
-            await bot.sendMessage(data.chatId, 'Уважаемый пользователь, в данный момент размещение объявлений о поиске жилья на канале не предусмотрено. Однако вы можете получать уведомления о появлении в базе подходящих вариантов жилья.', {
+            await bot.sendMessage(data.chatId, 'Уважаемый пользователь, размещение объявлений о поиске жилья на канале не предусмотрено. Однако вы можете подписаться на уведомления о появлении в базе новых вариантов жилья, соответствующих вашим критериям.', {
                 reply_markup: {
                   inline_keyboard: [
                     [{ text: '🔔Подписаться', callback_data: 'receive_notification' }, { text: '⛔Отказаться', callback_data: 'reject_notification' }],
