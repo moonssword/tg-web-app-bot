@@ -126,8 +126,6 @@ bot.on('callback_query', async (callbackQuery) => {
         if (callbackData === 'approved') {
 
             const channelId = await getChannelId(targetChannel);
-            console.log("cityChannels: ", config.cityChannels);
-            console.log(city, targetChannel, channelId)
             const chatMember = await bot.getChatMember(channelId, userId); // Проверка подписки на канал
                 
             if (!['member', 'administrator', 'creator'].includes(chatMember.status)) {  // Проверяем статус пользователя
