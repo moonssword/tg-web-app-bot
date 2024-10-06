@@ -261,7 +261,8 @@ const message_rentIn = `
                 title: 'Успешная публикация',
                 input_message_content: {
                     message_text: message,
-                    parse_mode: 'Markdown'
+                    parse_mode: 'Markdown',
+                    disable_web_page_preview: true
                 }
             });
 
@@ -278,7 +279,8 @@ const message_rentIn = `
                 title: 'Успешная публикация',
                 input_message_content: {
                     message_text: message_rentIn,
-                    parse_mode: 'Markdown'
+                    parse_mode: 'Markdown',
+                    disable_web_page_preview: true
                 }
             });
             
