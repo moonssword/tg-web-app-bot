@@ -10,9 +10,11 @@ module.exports = {
         password: process.env.DB_PASSWORD,
         port: process.env.DB_PORT,
     },
+    DOMAIN: 'bot.fatir.su',
     cityChannels: {
-        'Алматы': '@testtest123422dsdfv',
-        'Астана': '@qertqertqert',
-        'Шымкент': '@channel_shymkent',
-    }
+        'Алматы': '@rent_apartment_almaty',
+        'Астана': '@rent_apartment_astana',
+        'Шымкент': '@rent_apartment_shymkent',
+    },
+    CHECK_INTERVAL:'24 hours', // '10 seconds', '5 minutes', '24 hours', '7 days', '1 month', '1 year', '1 day 3 hours 15 minutes'
 };

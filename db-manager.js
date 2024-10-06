@@ -267,11 +267,11 @@ async function checkCurrentDayAD(userId) {
         FROM ads 
         WHERE tg_user_id = $1 
         AND is_posted = TRUE 
-        AND tg_posted_date > (CURRENT_TIMESTAMP - INTERVAL '24 hours')
+        AND tg_posted_date > (CURRENT_TIMESTAMP - INTERVAL $2)
         ORDER BY tg_posted_date DESC
         LIMIT 1;
     `;
-    const values = [userId];
+    const values = [userId, config.CHECK_INTERVAL];
 
     try {
         const result = await pool.query(query, values);

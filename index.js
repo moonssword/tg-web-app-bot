@@ -47,7 +47,7 @@ let photoTimers = {};
 
 // Запускаем задачу оповещения каждые 10 минут
 cron.schedule('*/10 * * * *', async () => { 
-    console.log('Starting notification schedule')
+    //console.log('Starting notification schedule')
     try {
         await dbManager.checkForNewAds(bot);
     } catch (error) {
@@ -59,7 +59,7 @@ bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     const text = msg.text;
-    const webAppUrl = `https://bot.fatir.su/form?chat_id=${chatId}`;
+    const webAppUrl = `https://${config.DOMAIN}/form?chat_id=${chatId}`;
 
     try {
         if (text === '/start') {

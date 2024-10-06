@@ -1,8 +1,6 @@
 .env
 /node_modules
-/media
-.DB.sql
-.config.js
+config.js
 /logs
 /Dockerfile
 .dockerignore
