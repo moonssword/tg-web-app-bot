@@ -125,8 +125,8 @@ bot.on('callback_query', async (callbackQuery) => {
     try {
         if (callbackData === 'approved') {
 
-            const channelId = await getChatId(targetChannel);
-            console.log(channelId)
+            const channelId = await getChannelId(targetChannel);
+            console.log(targetChannel, channelId)
             const chatMember = await bot.getChatMember(channelId, userId); // Проверка подписки на канал
                 
             if (!['member', 'administrator', 'creator'].includes(chatMember.status)) {  // Проверяем статус пользователя
@@ -389,7 +389,7 @@ async function getPhotoUrl(fileId) {
     return `https://api.telegram.org/file/bot${config.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
 }
 
-async function getChatId(targetChannel) {
+async function getChannelId(targetChannel) {
     const url = `https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/getChat?chat_id=${targetChannel}`;
     
     try {
