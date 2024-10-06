@@ -7,8 +7,6 @@ const cron = require('node-cron');
 const winston = require('winston');
 const fs = require('fs');
 const path = require('path');
-const bodyParser = require('body-parser');
-const crypto = require('crypto');
 
 const logDir = './logs';
 if (!fs.existsSync(logDir)) {
@@ -43,12 +41,10 @@ const app = express();
 
 app.use(express.json());
 app.use(cors());
-app.use(bodyParser.urlencoded({ extended: true }));
 
 let adsData = {};
 let photoTimers = {};
 
-// Запускаем задачу оповещения каждые 10 минут
 cron.schedule('*/10 * * * *', async () => { 
     //console.log('Starting notification schedule')
     try {
@@ -128,7 +124,8 @@ bot.on('callback_query', async (callbackQuery) => {
     try {
         if (callbackData === 'approved') {
 
-            const chatMember = await bot.getChatMember(targetChannel, userId); // Проверка подписки на канал
+            const channelId = `https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/getChat?chat_id=${targetChannel}`
+            const chatMember = await bot.getChatMember(channelId, userId); // Проверка подписки на канал
                 
             if (!['member', 'administrator', 'creator'].includes(chatMember.status)) {  // Проверяем статус пользователя
                 bot.sendMessage(chatId, `Пожалуйста, подпишитесь на канал ${targetChannel} для продолжения`);
@@ -299,21 +296,6 @@ const message_rentIn = `
         console.log('Error:', e);
         logger.error(`Error processing callback query from ${data.chatId}: ${e}`);
         return res.status(500).json({});
-    }
-});
-
-// Эндпоинт для проверки пользователя
-app.get('/userIsValid', (req, res) => {
-    const { hash, checkDataString } = req.query;
-
-    const secretKey = crypto.createHmac('sha256', config.TELEGRAM_BOT_TOKEN + "WebAppData").digest('hex');
-
-    const calculatedHash = crypto.createHmac('sha256', secretKey).update(checkDataString).digest('hex');
-    console.log(req.query)
-    if (calculatedHash === hash) {
-        return res.json({ result: true });
-    } else {
-        return res.json({ result: false });
     }
 });
 
