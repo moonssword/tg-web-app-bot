@@ -41,13 +41,8 @@ process.on('uncaughtException', (error) => {
 const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, {polling: true});
 const app = express();
 
-const corsOptions = {
-    origin: `https://${config.DOMAIN}`,
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-};
-
 app.use(express.json());
-app.use(cors(corsOptions));
+app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 let adsData = {};
