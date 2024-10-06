@@ -267,7 +267,7 @@ async function checkCurrentDayAD(userId) {
         FROM ads 
         WHERE tg_user_id = $1 
         AND is_posted = TRUE 
-        AND tg_posted_date > (CURRENT_TIMESTAMP - INTERVAL $2)
+        AND tg_posted_date > (CURRENT_TIMESTAMP - INTERVAL '$2')
         ORDER BY tg_posted_date DESC
         LIMIT 1;
     `;

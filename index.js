@@ -262,7 +262,7 @@ const message_rentIn = `
                 input_message_content: {
                     message_text: message,
                     parse_mode: 'Markdown',
-                    disable_web_page_preview: true
+        disable_web_page_preview: true
                 }
             });
 
