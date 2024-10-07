@@ -125,8 +125,7 @@ bot.on('callback_query', async (callbackQuery) => {
     try {
         if (callbackData === 'approved') {
 
-            const channelId = await getChannelId(targetChannel);
-            const chatMember = await bot.getChatMember(channelId, userId); // Проверка подписки на канал
+            const chatMember = await bot.getChatMember(targetChannel, userId); // Проверка подписки на канал
                 
             if (!['member', 'administrator', 'creator'].includes(chatMember.status)) {  // Проверяем статус пользователя
                 bot.sendMessage(chatId, `⚠️ Пожалуйста, подпишитесь на канал ${targetChannel} для продолжения`);
@@ -365,8 +364,8 @@ async function approveAD(ad, chatId) {
 }
 
 async function createMediaGroup(ad, includeCaption = true) {
-    const trimmedMessage = ad.message?.length > 400 
-        ? ad.message.substring(0, ad.message.lastIndexOf(' ', 400)) + '...' 
+    const trimmedMessage = ad.message?.length > 1024 
+        ? ad.message.substring(0, ad.message.lastIndexOf(' ', 1024)) + '...' 
         : ad.message;
 
     return ad.photos.map((fileId, index) => ({
@@ -386,17 +385,4 @@ async function savePhotoIDsToDB(chatId, fileId) {
 async function getPhotoUrl(fileId) {
     const file = await bot.getFile(fileId);
     return `https://api.telegram.org/file/bot${config.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-}
-
-async function getChannelId(targetChannel) {
-    const url = `https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/getChat?chat_id=${targetChannel}`;
-    
-    try {
-        const response = await axios.get(url);
-        const chatId = response.data.result.id;
-        return chatId;
-    } catch (error) {
-        console.error("Error fetching chat ID:", error.response ? error.response.data : error.message);
-        return null;
-    }
 }
