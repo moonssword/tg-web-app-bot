@@ -219,17 +219,17 @@ async function saveSearchCritireaToDB(data) {
 }
 
 // Обновление даты публикации
-async function updateADpostedData(adId, messageId) {
+async function updateADpostedData(adId, messageIds) {
     const query = `
         UPDATE ads 
         SET tg_posted_date = CURRENT_TIMESTAMP, is_posted = TRUE, message_id = $2
         WHERE id = $1;
     `;
-    const values = [adId, messageId];
+    const values = [adId, messageIds];
 
     try {
         await pool.query(query, values);
-        console.log('Ad posted date updated');
+        console.log(`Ad ${adId} posted date updated`);
     } catch (err) {
         console.error('Error updating posted data:', err);
     }
@@ -278,10 +278,23 @@ async function checkCurrentDayAD(userId) {
         if (result.rows.length > 0) {
             const tgPostedDate = result.rows[0].tg_posted_date;
             const postedDate = new Date(tgPostedDate);
-            postedDate.setHours(postedDate.getHours() + 24);
-            const formattedDate = `${postedDate.getFullYear()}-${String(postedDate.getMonth() + 1).padStart(2, '0')}-${String(postedDate.getDate()).padStart(2, '0')} ${String(postedDate.getHours()).padStart(2, '0')}:${String(postedDate.getMinutes()).padStart(2, '0')}`;
 
-            return { canPost: false, availableToPostDate: formattedDate }; 
+            // Разбор config.CHECK_INTERVAL
+            const interval = parseInterval(config.CHECK_INTERVAL);
+            if (interval) {
+                // Добавляем время согласно интервалу
+                if (interval.days) postedDate.setDate(postedDate.getDate() + interval.days);
+                if (interval.hours) postedDate.setHours(postedDate.getHours() + interval.hours);
+                if (interval.minutes) postedDate.setMinutes(postedDate.getMinutes() + interval.minutes);
+
+                // Форматирование даты для отображения
+                const formattedDate = `${postedDate.getFullYear()}-${String(postedDate.getMonth() + 1).padStart(2, '0')}-${String(postedDate.getDate()).padStart(2, '0')} ${String(postedDate.getHours()).padStart(2, '0')}:${String(postedDate.getMinutes()).padStart(2, '0')}`;
+
+                return { canPost: false, availableToPostDate: formattedDate }; 
+            } else {
+                console.error('Invalid CHECK_INTERVAL format');
+                return false;
+            }
         }
 
         return { canPost: true };
@@ -289,6 +302,34 @@ async function checkCurrentDayAD(userId) {
         console.error('Error checking ads:', err);
         return false;
     }
+}
+
+// Функция для парсинга INTERVAL
+function parseInterval(interval) {
+    const regex = /(\d+)\s*(day|hour|minute|second)s?/g;
+    let match;
+    const parsedInterval = { days: 0, hours: 0, minutes: 0 };
+
+    while ((match = regex.exec(interval)) !== null) {
+        const value = parseInt(match[1]);
+        const unit = match[2];
+
+        switch (unit) {
+            case 'day':
+                parsedInterval.days += value;
+                break;
+            case 'hour':
+                parsedInterval.hours += value;
+                break;
+            case 'minute':
+                parsedInterval.minutes += value;
+                break;
+            default:
+                break;
+        }
+    }
+
+    return parsedInterval;
 }
 
 // Функция проверки новых объявлений
@@ -303,69 +344,69 @@ async function checkForNewAds(bot) {
                 AND is_active = true
             `, [user.user_id]);
 
-            if (criteria.rows.length > 0) {
-                const searchCriteria = criteria.rows[0];
+            for (let searchCriteria of criteria.rows) {
+                    const matches = await pool.query(`
+                    SELECT * FROM ads 
+                    WHERE city = $1
+                    AND (district = $2 OR $2 = '')
+                    AND (microdistrict = $3 OR $3 = '' OR microdistrict = '' OR microdistrict IS NULL)
+                    AND is_posted = true
+                    AND is_active = true
+                    AND house_type = $4
+                    AND rooms = $5
+                    AND price BETWEEN $6 AND $7
+                    `, [
+                        searchCriteria.city, 
+                        searchCriteria.district,
+                        searchCriteria.microdistrict,
+                        searchCriteria.house_type,
+                        searchCriteria.rooms,
+                        searchCriteria.price_min,
+                        searchCriteria.price_max
+                    ]);
 
-                const matches = await pool.query(`
-                SELECT * FROM ads 
-                WHERE city = $1
-                AND (district = $2 OR $2 IS NULL)
-                AND (microdistrict = $3 OR $3 IS NULL)
-                AND is_posted = true
-                AND is_active = true
-                AND house_type = $4
-                AND rooms = $5
-                AND price BETWEEN $6 AND $7
-                `, [
-                    searchCriteria.city, 
-                    searchCriteria.district,
-                    searchCriteria.microdistrict,
-                    searchCriteria.house_type,
-                    searchCriteria.rooms,
-                    searchCriteria.price_min,
-                    searchCriteria.price_max
-                ]);
+                    // Если найдены подходящие объявления
+                    if (matches.rows.length > 0) {
+                        let messageText = '❗Появились новые подходящие объявления:\n\n';
+                        const notifiedAds = await pool.query(`
+                            SELECT ad_id FROM user_notifications 
+                            WHERE user_id = $1
+                        `, [user.user_id]);
 
-                // Если найдены подходящие объявления
-                if (matches.rows.length > 0) {
-                    let messageText = '❗Появились новые подходящие объявления:\n\n';
-                    const notifiedAds = await pool.query(`
-                        SELECT ad_id FROM user_notifications 
-                        WHERE user_id = $1
-                    `, [user.user_id]);
+                        const notifiedAdIds = new Set(notifiedAds.rows.map(row => row.ad_id));
 
-                    const notifiedAdIds = new Set(notifiedAds.rows.map(row => row.ad_id));
+                        for (let ad of matches.rows) {
+                            if (!notifiedAdIds.has(ad.id)) {
+                                const city = ad.city;
+                                const targetChannel = config.cityChannels[city];
+                                const adLink = `https://t.me/${targetChannel.replace('@', '')}/${ad.message_id[0]}`;
+                                messageText += `🔹 [Объявление №${ad.id}](${adLink})\n`;
 
-                    for (let ad of matches.rows) {
-                        if (!notifiedAdIds.has(ad.id)) {
-                            const adLink = `https://t.me/${config.TELEGRAM_CHANNEL.replace('@', '')}/${ad.message_id}`;
-                            messageText += `🔹 [Объявление №${ad.id}](${adLink})\n`;
+                                // Сохраняем уведомление в базе данных
+                                await pool.query(`
+                                    INSERT INTO user_notifications (user_id, ad_id) 
+                                    VALUES ($1, $2)
+                                `, [user.user_id, ad.id]);
+                            }
+                        }
 
-                            // Сохраняем уведомление в базе данных
-                            await pool.query(`
-                                INSERT INTO user_notifications (user_id, ad_id) 
-                                VALUES ($1, $2)
-                            `, [user.user_id, ad.id]);
+                        if (messageText !== '❗Появились новые подходящие объявления:\n\n') {
+                            // Отправляем уведомление пользователю
+                            await bot.sendMessage(user.tg_user_id, messageText, {
+                                parse_mode: 'Markdown',
+                                disable_web_page_preview: true
+                            });                        
+
+                            // Обновляем дату последнего уведомления
+                            const updateCriteriaQuery = `
+                                UPDATE search_criteria 
+                                SET last_notified = CURRENT_TIMESTAMP 
+                                WHERE user_id = $1;
+                            `;
+                            await pool.query(updateCriteriaQuery, [user.user_id]);
                         }
                     }
-
-                    if (messageText !== '❗Появились новые подходящие объявления:\n\n') {
-                        // Отправляем уведомление пользователю
-                        await bot.sendMessage(user.tg_user_id, messageText, {
-                            parse_mode: 'Markdown',
-                            disable_web_page_preview: true
-                        });                        
-
-                        // Обновляем дату последнего уведомления
-                        const updateCriteriaQuery = `
-                            UPDATE search_criteria 
-                            SET last_notified = CURRENT_TIMESTAMP 
-                            WHERE user_id = $1;
-                        `;
-                        await pool.query(updateCriteriaQuery, [user.user_id]);
-                    }
                 }
-            }
         }
     } catch (err) {
         console.error('Error checking for new ads:', err);
@@ -377,13 +418,13 @@ async function deactivateAd(messageId) {
     const query = `
         UPDATE ads 
         SET is_active = FALSE 
-        WHERE message_id = $1;
+        WHERE $1 = ANY(message_id);
     `;
     const values = [messageId];
 
     try {
         await pool.query(query, values);
-        console.log(`Ad with message_id [${messageId}] deactivated successfully.`);
+        console.log(`Ad with message_id: ${messageId} deactivated and delete from channel successfully.`);
     } catch (err) {
         console.error('Error deactivating ad:', err);
     }
@@ -406,6 +447,61 @@ async function deactivateSC(id) {
     }
 }
 
+// Функция для получения критериев поиска по tg_user_id
+async function getSearchCriteriaByUserId(userId) {
+    const query = `
+        SELECT 
+            criteria_id, user_id, tg_user_id, price_min, price_max, city, 
+            district, microdistrict, duration, description, room_type, 
+            room_location, house_type, phone, last_notified, rooms
+        FROM search_criteria 
+        WHERE tg_user_id = $1 AND is_active = TRUE;
+    `;
+    const values = [userId];
+
+    try {
+        const result = await pool.query(query, values);
+        return result.rows;
+    } catch (err) {
+        console.error('Error fetching search criteria:', err);
+        throw new Error('Error fetching search criteria');
+    }
+}
+
+// Функция для обновления записи в search_criteria
+async function updateSearchCriteria(criteriaId, updates) {
+    if (!criteriaId) {
+        throw new Error('Criteria ID is required');
+    }
+
+    if (Object.keys(updates).length === 0) {
+        throw new Error('No updates provided');
+    }
+
+    const setClause = Object.keys(updates)
+        .map((key, index) => `${key} = $${index + 1}`)
+        .join(', ');
+    const values = Object.values(updates);
+
+    const query = `
+        UPDATE search_criteria
+        SET ${setClause}
+        WHERE criteria_id = $${values.length + 1}
+        RETURNING *;
+    `;
+
+    try {
+        const result = await pool.query(query, [...values, criteriaId]);
+        if (result.rowCount === 0) {
+            throw new Error('Criteria not found');
+        }
+        return result.rows[0]; // Возвращаем обновленную запись
+    } catch (err) {
+        console.error('Error updating search criteria:', err);
+        throw new Error('Error updating search criteria');
+    }
+}
+
 const dbManager = {
     createNewUser,
     saveADtoDB,
@@ -415,6 +511,8 @@ const dbManager = {
     checkForNewAds,
     deactivateAd,
     deactivateSC,
+    getSearchCriteriaByUserId,
+    updateSearchCriteria,
   };
   
   module.exports = dbManager;
