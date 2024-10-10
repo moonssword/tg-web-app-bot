@@ -502,6 +502,60 @@ async function updateSearchCriteria(criteriaId, updates) {
     }
 }
 
+// Функция для получения объявлений по tg_user_id
+async function getAdsByUserId(userId) {
+    const query = `
+        SELECT 
+            id, user_id, tg_user_id, title, price, house_type, duration, address,
+            rooms, city, district, microdistrict, phone, message_id, is_active
+        FROM ads 
+        WHERE tg_user_id = $1 AND is_active = TRUE;
+    `;
+    const values = [userId];
+
+    try {
+        const result = await pool.query(query, values);
+        return result.rows;
+    } catch (err) {
+        console.error('Error fetching ads:', err);
+        throw new Error('Error fetching ads');
+    }
+}
+
+// Функция для обновления записи в таблице ads
+async function updateAd(adId, updates) {
+    if (!adId) {
+        throw new Error('Ad ID is required');
+    }
+
+    if (Object.keys(updates).length === 0) {
+        throw new Error('No updates provided');
+    }
+
+    const setClause = Object.keys(updates)
+        .map((key, index) => `${key} = $${index + 1}`)
+        .join(', ');
+    const values = Object.values(updates);
+
+    const query = `
+        UPDATE ads
+        SET ${setClause}
+        WHERE id = $${values.length + 1}
+        RETURNING *;
+    `;
+
+    try {
+        const result = await pool.query(query, [...values, adId]);
+        if (result.rowCount === 0) {
+            throw new Error('Ad not found');
+        }
+        return result.rows[0];
+    } catch (err) {
+        console.error('Error updating ad:', err);
+        throw new Error('Error updating ad');
+    }
+}
+
 const dbManager = {
     createNewUser,
     saveADtoDB,
@@ -513,6 +567,8 @@ const dbManager = {
     deactivateSC,
     getSearchCriteriaByUserId,
     updateSearchCriteria,
+    getAdsByUserId,
+    updateAd,
   };
   
   module.exports = dbManager;

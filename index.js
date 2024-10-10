@@ -155,7 +155,7 @@ bot.on('callback_query', async (callbackQuery) => {
 `;
 
             const webAppUrlSC = `https://${config.DOMAIN}/autosearch?chat_id=${chatId}`;
-            const caption = `🔍 Поиск ${searchCriteriaID} сохранен!\n\n\`${searchText}\`\n\n🔻Управление поисками`;
+            const caption = `🔍 Поиск ${searchCriteriaID} сохранен!\n\n\`${searchText}\`\n🔻Управление поисками`;
             const inlineKeyboard = {
                 reply_markup: {
                     inline_keyboard: [
@@ -170,7 +170,7 @@ bot.on('callback_query', async (callbackQuery) => {
             bot.deleteMessage(chatId, messageId);
 
         } else if (callbackData.startsWith('delete_ad_')) {
-            const messageIds = JSON.parse(callbackData.replace('delete_ad_', ''));
+            /*const messageIds = JSON.parse(callbackData.replace('delete_ad_', ''));
             let successDeleted = false;
             for (const messageId of messageIds) {
                 try {
@@ -188,7 +188,7 @@ bot.on('callback_query', async (callbackQuery) => {
                 //await bot.deleteMessage(chatId, messageId);
             } else {
                 await bot.answerCallbackQuery(callbackQuery.id, {text: '⚠️ Объявление не найдено или было удалено ранее из канала', show_alert: false });
-            }
+            }*/
 
         } else if (callbackData.startsWith('delete_sc_')) {
             const searchCriteriaID = callbackData.split('_')[2];
@@ -347,6 +347,59 @@ app.put('/api/sc/:criteriaId', async (req, res) => {
     }
 });
 
+// Эндпоинт для получения объявлений пользователя
+app.get('/api/ads', async (req, res) => {
+    const userId = req.query.userId;
+
+    if (!userId) {
+        return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    try {
+        const ads = await dbManager.getAdsByUserId(userId);
+
+        if (ads.length === 0) {
+            return res.status(404).json({ message: 'No ads found for this user.' });
+        }
+
+        res.json({ ads: ads || [] });
+    } catch (err) {
+        console.error('Error fetching ads:', err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Эндпоинт для обновления объявления
+app.put('/api/ads/:adId', async (req, res) => {
+    const { adId } = req.params;
+    const updates = req.body;
+
+    try {
+        const updatedAd = await dbManager.updateAd(adId, updates);
+        res.json({ message: 'Ad updated successfully', updatedAd });
+
+        const city = updates.city;
+        const targetChannel = config.cityChannels[city];
+        const messageIds = updates.message_id;
+        let successDeleted = false;
+        for (const messageId of messageIds) {
+            try {
+                const deleteResult = await bot.deleteMessage(targetChannel, messageId);
+                if (deleteResult) successDeleted = true;
+            } catch (err) {
+                console.error(`Ошибка при удалении из канала ${targetChannel} сообщения ${messageId}:`, err);
+                logger.error(`Ошибка при удалении из канала ${targetChannel} сообщения ${messageId}:`, err);
+            }
+        }
+        if (successDeleted) {
+            await bot.sendMessage(updates.tg_user_id, '✅ Объявление удалено из канала');
+        }
+
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
 const PORT = config.PORT;
 app.listen(PORT, () => {
     console.log(`Server started on PORT ${PORT} at ${new Date().toLocaleString()}`);
@@ -360,12 +413,21 @@ async function postADtoChannel(ad, chatId, targetChannel) {
     const messageIds = messageOnChannel.map(message => message.message_id);
     const messageLink = `https://t.me/${targetChannel.replace('@', '')}/${messageIds[0]}`;
 
-    const caption = `🎉 Ваше [объявление](${messageLink}) успешно опубликовано!\n\n🏠 После сдачи жилья вы можете удалить объявление из канала ⤵️`;
+    const caption = `🎉 Ваше [объявление](${messageLink}) успешно опубликовано!\n🏠После сдачи жилья вы можете удалить объявление из канала ⤵️`;
 
-    const inlineKeyboard = {
+    /*const inlineKeyboard = {
         reply_markup: {
             inline_keyboard: [
                 [{ text: '🗑️Удалить объявление', callback_data: `delete_ad_${JSON.stringify(messageIds)}` }]
+            ]
+        }
+    };*/
+
+    const webAppUrlADS = `https://${config.DOMAIN}/ads?chat_id=${chatId}`;
+    const inlineKeyboard = {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '📰Мои объявления', web_app: { url: webAppUrlADS} }]
             ]
         }
     };
