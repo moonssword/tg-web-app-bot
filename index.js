@@ -64,7 +64,7 @@ bot.on('message', async (msg) => {
     try {
         if (text === '/start') {
             await dbManager.createNewUser(msg);
-            const sentMessage = await bot.sendMessage(chatId, `Добро пожаловать, ${msg.from.first_name}! Для размещения объявления на канале перейдите на форму ⬇️`, {
+            const sentMessage = await bot.sendMessage(chatId, `👋Добро пожаловать, ${msg.from.first_name}!\n\nЧтобы разместить объявление о сдаче жилья или получать уведомления о подходящих вариантах, перейдите на форму🔻`, {
                 reply_markup: {
                     inline_keyboard: [
                         [{ text: '🔸Опубликовать🔸', web_app: { url: webAppUrl} }]
@@ -205,7 +205,7 @@ bot.on('callback_query', async (callbackQuery) => {
       }
 });
 
-app.post('/web-data', async (req, res) => {
+app.post('/api/web-data', async (req, res) => {
     const data = req.body;
     const hasPostedToday = await dbManager.checkCurrentDayAD(data.user.id); // Объект {canPost: true/false, availableToPostDate}
     //console.log('Received data:', JSON.stringify(data));
@@ -313,7 +313,7 @@ const message_rentIn = `
 });
 
 // Эндпоинт для получения критериев поиска пользователя
-app.get('/sc', async (req, res) => {
+app.get('/api/sc', async (req, res) => {
     const userId = req.query.userId;
 
     if (!userId) {
@@ -335,7 +335,7 @@ app.get('/sc', async (req, res) => {
 });
 
 // Эндпоинт для обновления критериев поиска
-app.put('/sc/:criteriaId', async (req, res) => {
+app.put('/api/sc/:criteriaId', async (req, res) => {
     const { criteriaId } = req.params;
     const updates = req.body;
 
