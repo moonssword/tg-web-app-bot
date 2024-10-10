@@ -67,7 +67,7 @@ bot.on('message', async (msg) => {
             const sentMessage = await bot.sendMessage(chatId, `Добро пожаловать, ${msg.from.first_name}! Для размещения объявления на канале перейдите на форму ⬇️`, {
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: '🔸Разместить объявление🔸', web_app: { url: webAppUrl} }]
+                        [{ text: '🔸Опубликовать🔸', web_app: { url: webAppUrl} }]
                     ]
                 }
             });
@@ -155,11 +155,11 @@ bot.on('callback_query', async (callbackQuery) => {
 `;
 
             const webAppUrlSC = `https://${config.DOMAIN}/autosearch?chat_id=${chatId}`;
-            const caption = `🔍 Поиск №${searchCriteriaID} сохранен!\n\n\`${searchText}\`\n\nВы можете отписаться от уведомлений👇`;
+            const caption = `🔍 Поиск ${searchCriteriaID} сохранен!\n\n\`${searchText}\`\n\n🔻Управление поисками`;
             const inlineKeyboard = {
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: '🔖Управление подписками', web_app: { url: webAppUrlSC} }]
+                        [{ text: '🔖Мои поиски', web_app: { url: webAppUrlSC} }]
                     ]
                 }
             };
@@ -280,7 +280,7 @@ const message_rentIn = `
             if (hasPostedToday.canPost) {
                 await bot.sendMessage(data.chatId, '📸 Для продолжения, пожалуйста, отправьте фотографии жилья (до 10 шт.)');
             } else {
-                await bot.sendMessage(data.chatId, `⚠️ Разрешена публикация одного объявления в день!\nСледующее объявление может быть размещено ${hasPostedToday.availableToPostDate}`);
+                await bot.sendMessage(data.chatId, `🕗 Следующая публикация возможна ${hasPostedToday.availableToPostDate}`);
             }
             
         } else if (data.ad_type === 'rentIn') {
@@ -295,7 +295,7 @@ const message_rentIn = `
                 }
             });
             
-            await bot.sendMessage(data.chatId, 'Размещение объявлений о поиске жилья на канале не предусмотрено.\nВы можете сохранить поиск в избранное и получать уведомления.', {
+            await bot.sendMessage(data.chatId, '📰 На данный момент размещение объявлений о поиске жилья на канале не предусмотрено.\nВы можете сохранить поиск в избранное и получать уведомления.', {
                 reply_markup: {
                   inline_keyboard: [
                     [{ text: '💙 Сохранить поиск', callback_data: 'receive_notification' }, { text: '⛔ Отменить', callback_data: 'reject_notification' }],
@@ -327,7 +327,7 @@ app.get('/sc', async (req, res) => {
             return res.status(404).json({ message: 'No active search criteria found for this user.' });
         }
 
-        res.json({ searchCriteria }); // Отправляем критерии на фронтенд
+        res.json({ searchCriteria: searchCriteria || [] });
     } catch (err) {
         console.error('Error fetching search criteria:', err);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -383,7 +383,7 @@ async function approvePhotoAD(ad, chatId) {
 
     await bot.sendMediaGroup(chatId, mediaGroup);
 
-    await bot.sendMessage(chatId, `⬆️ Вы можете добавить еще ${currentPhotosCount} фотографии или опубликовать объявление`, {
+    await bot.sendMessage(chatId, `⬆️ Вы можете добавить еще ${currentPhotosCount} фотографий или опубликовать объявление`, {
             reply_markup: {
               inline_keyboard: [
                 [{ text: '✅Опубликовать', callback_data: 'approved' }, { text: '↩️Добавить фото', callback_data: 'add_photo' }],

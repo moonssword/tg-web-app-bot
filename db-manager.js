@@ -249,7 +249,7 @@ async function createNewUser(msg) {
         RETURNING user_id;
     `;
 
-    const values = [msg.from.id, msg.from.username, msg.from.first_name, msg.chat.id, msg.from.is_premium];
+    const values = [msg.from.id, msg.from.username, msg.from.first_name, msg.chat.id, !!msg.from.is_premium];
 
     try {
         const result = await pool.query(query, values);
@@ -353,7 +353,7 @@ async function checkForNewAds(bot) {
                     AND is_posted = true
                     AND is_active = true
                     AND house_type = $4
-                    AND rooms = $5
+                    AND (rooms = $5 OR $5 IS NULL AND rooms IS NULL)
                     AND price BETWEEN $6 AND $7
                     `, [
                         searchCriteria.city, 
@@ -380,7 +380,7 @@ async function checkForNewAds(bot) {
                                 const city = ad.city;
                                 const targetChannel = config.cityChannels[city];
                                 const adLink = `https://t.me/${targetChannel.replace('@', '')}/${ad.message_id[0]}`;
-                                messageText += `🔹 [Объявление №${ad.id}](${adLink})\n`;
+                                messageText += `🔹[Объявление №${ad.id}](${adLink})\n`;
 
                                 // Сохраняем уведомление в базе данных
                                 await pool.query(`
