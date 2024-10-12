@@ -219,7 +219,7 @@ app.post('/api/web-data', async (req, res) => {
     try {
         const message = `
 🏠 *Сдается* ${data.house_type === 'apartment' ? data.rooms + '-комн.квартира' : data.house_type === 'room' ? 'комната' + roomTypeText + (roomLocationText ? ' ' + roomLocationText : '') : 'дом'} ${data.duration === 'long_time' ? 'на длительный срок' : 'посуточно'}, ${data.area} м², ${data.floor_current}/${data.floor_total} этаж${data.bed_capacity ? ', спальных мест - ' + data.bed_capacity : ''}
-*Адрес:* г.${data.city}, ${data.district} р-н, ${data.microdistrict}, ${data.address}
+*Адрес:* г.${data.city}, ${data.district} р-н, ${data.microdistrict ? data.microdistrict + ', ' : ''} ${data.address}
 *Сдает:* ${data.author === 'owner' ? 'собственник': 'посредник'}
 *Цена:* ${data.price} ₸
 *Депозит:* ${data.deposit ? `${data.deposit_value}%` : 'нет'}
