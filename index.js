@@ -47,7 +47,7 @@ let adsData = {};
 let photoTimers = {};
 
 cron.schedule('*/10 * * * *', async () => { 
-    console.log('Starting notification schedule')
+    //console.log('Starting notification schedule')
     try {
         await dbManager.checkForNewAds(bot);
     } catch (error) {
@@ -64,7 +64,7 @@ bot.on('message', async (msg) => {
     try {
         if (text === '/start') {
             await dbManager.createNewUser(msg);
-            const sentMessage = await bot.sendMessage(chatId, `👋Добро пожаловать, ${msg.from.first_name}!\n\nЧтобы разместить объявление о сдаче жилья или получать уведомления о подходящих вариантах, перейдите на форму🔻`, {
+            const sentMessage = await bot.sendMessage(chatId, `👋Добро пожаловать, ${msg.from.first_name}!\n\nЧтобы разместить объявление о сдаче жилья или подписаться на уведомления о подходящих вариантах, перейдите на форму🔻`, {
                 reply_markup: {
                     inline_keyboard: [
                         [{ text: '🔸Опубликовать🔸', web_app: { url: webAppUrl} }]
@@ -137,7 +137,8 @@ bot.on('callback_query', async (callbackQuery) => {
                 const channelMessageIds = await postADtoChannel(adsData[chatId], chatId, targetChannel);
                 // await dbManager.checkForNewAds(bot); // Отправка уведомлений об обяъвлении сразу после публикации
                 bot.answerCallbackQuery(callbackQuery.id, {text: '✅ Объявление успешно опубликовано', show_alert: false});
-                dbManager.updateADpostedData(adId, channelMessageIds);
+
+                await dbManager.updateADpostedData(adId, channelMessageIds, targetChannel);
                 await bot.deleteMessage(chatId, messageId);
             }
         } else if (callbackData === 'add_photo') {
@@ -378,21 +379,22 @@ app.put('/api/ads/:adId', async (req, res) => {
         const updatedAd = await dbManager.updateAd(adId, updates);
         res.json({ message: 'Ad updated successfully', updatedAd });
 
-        const city = updates.city;
-        const targetChannel = config.cityChannels[city];
-        const messageIds = updates.message_id;
-        let successDeleted = false;
-        for (const messageId of messageIds) {
-            try {
-                const deleteResult = await bot.deleteMessage(targetChannel, messageId);
-                if (deleteResult) successDeleted = true;
-            } catch (err) {
-                console.error(`Ошибка при удалении из канала ${targetChannel} сообщения ${messageId}:`, err);
-                logger.error(`Ошибка при удалении из канала ${targetChannel} сообщения ${messageId}:`, err);
+        if (!updates.is_active) {
+            const targetChannel = updates.tg_channel;
+            const messageIds = updates.message_id;
+            let successDeleted = false;
+            for (const messageId of messageIds) {
+                try {
+                    const deleteResult = await bot.deleteMessage(targetChannel, messageId);
+                    if (deleteResult) successDeleted = true;
+                } catch (err) {
+                    console.error(`Ошибка при удалении из канала ${targetChannel} сообщения ${messageId}:`, err);
+                    logger.error(`Ошибка при удалении из канала ${targetChannel} сообщения ${messageId}:`, err);
+                }
             }
-        }
-        if (successDeleted) {
-            await bot.sendMessage(updates.tg_user_id, '✅ Объявление удалено из канала');
+            if (successDeleted) {
+                await bot.sendMessage(updates.tg_user_id, '✅ Объявление удалено из канала');
+            }
         }
 
     } catch (err) {

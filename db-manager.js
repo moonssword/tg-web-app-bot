@@ -219,13 +219,13 @@ async function saveSearchCritireaToDB(data) {
 }
 
 // Обновление даты публикации
-async function updateADpostedData(adId, messageIds) {
+async function updateADpostedData(adId, messageIds, targetChannel) {
     const query = `
         UPDATE ads 
-        SET tg_posted_date = CURRENT_TIMESTAMP, is_posted = TRUE, message_id = $2
+        SET tg_posted_date = CURRENT_TIMESTAMP, is_posted = TRUE, message_id = $2, tg_channel = $3
         WHERE id = $1;
     `;
-    const values = [adId, messageIds];
+    const values = [adId, messageIds, targetChannel];
 
     try {
         await pool.query(query, values);
@@ -413,8 +413,8 @@ async function checkForNewAds(bot) {
     }
 }
 
-// Функция для деактивации объявления
-async function deactivateAd(messageId) {
+// Функция для деактивации объявления (заменена функцией updateAD)
+/*async function deactivateAd(messageId) {
     const query = `
         UPDATE ads 
         SET is_active = FALSE 
@@ -428,7 +428,7 @@ async function deactivateAd(messageId) {
     } catch (err) {
         console.error('Error deactivating ad:', err);
     }
-}
+}*/
 
 // Функция для деактивации поиска
 async function deactivateSC(id) {
@@ -506,7 +506,7 @@ async function updateSearchCriteria(criteriaId, updates) {
 async function getAdsByUserId(userId) {
     const query = `
         SELECT 
-            id, user_id, tg_user_id, title, price, house_type, duration, address,
+            id, user_id, tg_user_id, tg_channel, price, house_type, duration, address,
             rooms, city, district, microdistrict, phone, message_id, is_active
         FROM ads 
         WHERE tg_user_id = $1 AND is_active = TRUE;
@@ -563,7 +563,6 @@ const dbManager = {
     updateADpostedData,
     saveSearchCritireaToDB,
     checkForNewAds,
-    deactivateAd,
     deactivateSC,
     getSearchCriteriaByUserId,
     updateSearchCriteria,
