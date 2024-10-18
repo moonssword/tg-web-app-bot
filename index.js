@@ -223,7 +223,7 @@ app.post('/api/web-data', async (req, res) => {
 *Сдает:* ${data.author === 'owner' ? 'собственник': 'посредник'}
 *Цена:* ${data.price} ₸
 *Депозит:* ${data.deposit ? `${data.deposit_value}%` : 'нет'}
-*Телефон:* ${data.phone} ${[ data.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${data.phone})` : '', data.tg_username ? `[Telegram](https://t.me/${data.tg_username})` : ''].filter(Boolean).join(' ')}
+*Контакты:* ${data.call ? data.phone : ''} ${[ data.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${data.phone})` : '', data.tg_username ? `[Telegram](https://t.me/${data.tg_username})` : ''].filter(Boolean).join(' ')}
 🛋️ *Удобства*: ${[
     data.fridge ? 'холодильник' : '',
     data.washing_machine ? 'стиральная машина' : '',
@@ -235,6 +235,7 @@ app.post('/api/web-data', async (req, res) => {
     data.stove ? 'плита' : '',
     data.shower ? 'душ' : '',
     data.separate_toilet ? 'раздельный санузел' : '',
+    data.combined_toilet ? 'совмещенный санузел' : '',
     data.bed_linen ? 'постельное белье' : '',
     data.towels ? 'полотенца' : '',
     data.hygiene_items ? 'средства гигиены' : '',
@@ -429,7 +430,7 @@ async function postADtoChannel(ad, chatId, targetChannel) {
     const inlineKeyboard = {
         reply_markup: {
             inline_keyboard: [
-                [{ text: '📰Мои объявления', web_app: { url: webAppUrlADS} }]
+                [{ text: '📰 Мои объявления', web_app: { url: webAppUrlADS} }]
             ]
         }
     };
