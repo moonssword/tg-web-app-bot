@@ -2,7 +2,10 @@ require('dotenv').config();
 
 module.exports = {
     TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
+    ADMIN_BOT_TOKEN: process.env.ADMIN_BOT_TOKEN,
     TELEGRAM_CHANNEL: process.env.TELEGRAM_CHANNEL,
+    ADMIN_ID: process.env.ADMIN_ID,
+    MODERATOR_ID: process.env.MODERATOR_ID,
     DOMAIN: process.env.DOMAIN,
     PORT: process.env.PORT,
     DB_CONFIG: {

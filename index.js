@@ -49,7 +49,7 @@ let photoTimers = {};
 cron.schedule('*/10 * * * *', async () => { 
     //console.log('Starting notification schedule')
     try {
-        await dbManager.checkForNewAds(bot);
+        await dbManager.checkForNewAds(bot); // Периодическая проверка новых объявления и отправка уведомлений
     } catch (error) {
         logger.error(`Error during notification schedule: ${error}`);
     }
@@ -64,15 +64,60 @@ bot.on('message', async (msg) => {
     try {
         if (text === '/start') {
             await dbManager.createNewUser(msg);
-            const sentMessage = await bot.sendMessage(chatId, `👋Добро пожаловать, ${msg.from.first_name}!\n\nЧтобы разместить объявление о сдаче жилья или подписаться на уведомления о подходящих вариантах, перейдите на форму🔻`, {
+            const sentMessage = await bot.sendMessage(chatId, `Добро пожаловать, ${msg.from.first_name}!\n\nЧтобы разместить объявление или подписаться на уведомления о подходящих вариантах, перейдите на форму`, {
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: '🔸Опубликовать🔸', web_app: { url: webAppUrl} }]
+                        [{ text: 'Опубликовать', web_app: { url: webAppUrl} }]
                     ]
                 }
             });
             await bot.pinChatMessage(chatId, sentMessage.message_id);
+        } else if (text && typeof text === 'string' && text.startsWith('@')) {
+            const command = text.replace(/^@\S+\s/, ''); // Удаляет `@название_канала `
+
+            if (command.startsWith('/approve_ad')) { // Подтверждение и публикация
+                const parts = command.split('_');
+
+                // Проверка на корректность формата
+                if (parts.length < 4) {
+                    await bot.sendMessage(chatId, '❗ Неверный формат команды. Ожидается: /approve_ad_chatId_adId');
+                    return;
+                }
+
+                const chatIdToPost = parts[2];
+                const adId = parts[3];
+
+                try {
+                    const { messageIds, messageLink } = await postADtoChannel(adId, chatIdToPost);
+                    await bot.sendMessage(chatId, `✅ [Объявление](${messageLink}) подтверждено и опубликовано`, { parse_mode: 'Markdown' });
+                    await dbManager.updateADpostedData(adId, messageIds);
+                } catch (error) {
+                    console.error('Ошибка при публикации объявления:', error);
+                    await bot.sendMessage(chatId, '❗ Произошла ошибка при публикации объявления.');
+                }
+            } else if (command.startsWith('/reject_ad')) {  // Отклонение публикации
+                const parts = command.split('_');
+
+                // Проверка на корректность формата
+                if (parts.length < 4) {
+                    await bot.sendMessage(chatId, '❗ Неверный формат команды. Ожидается: /reject_ad_chatId_adId');
+                    return;
+                }
+
+                const chatIdToReject = parts[2];
+                const adId = parts[3];
+
+                try {
+                    await bot.sendMessage(chatId, `❗ Объявление ${adId} отклонено`);
+                    await bot.sendMessage(chatIdToReject, '‼️ Ваше объявление было отклонено модератором.');
+                    await dbManager.updateAd(adId, { is_active: false });
+                } catch (error) {
+                    console.error('Ошибка при отклонении объявления:', error);
+                    await bot.sendMessage(chatId, '❗ Произошла ошибка при отклонении объявления.');
+                }
+            }
         }
+
 
         if ((msg.media_group_id || msg.photo) && adsData[chatId]?.data.ad_type == 'rentOut') {
             const photoArray = msg.photo;
@@ -115,38 +160,77 @@ bot.on('callback_query', async (callbackQuery) => {
     const chatId = callbackQuery.message.chat.id;
     const messageId = callbackQuery.message.message_id;
     const userId = callbackQuery.from.id;
+    const username = callbackQuery.from.username;
     const callbackData = callbackQuery.data;
     const currentPhotosCount = 10 - adsData[chatId]?.photos?.length;
     const city = adsData[chatId].data.city; // Получение города из временной памяти
-    const targetChannel = config.cityChannels[city]; // Получение канала из временной памяти
-
-    //const hasPostedToday = await checkCurrentDayAD(userId);
+    const targetChannel = config.cityChannels[city];
 
     try {
-        if (callbackData === 'approved') {
+        if (callbackData === 'send_to_moderate') {
 
             const chatMember = await bot.getChatMember(targetChannel, userId); // Проверка подписки на канал
-                
-            if (!['member', 'administrator', 'creator'].includes(chatMember.status)) {  // Проверяем статус пользователя
-                bot.sendMessage(chatId, `⚠️Пожалуйста, подпишитесь на канал ${targetChannel} для продолжения`);
+            const targetChannelURL = `https://t.me/${targetChannel.replace('@', '')}`;
+            if (!['member', 'administrator', 'creator'].includes(chatMember.status)) {
+                bot.sendMessage(chatId, `⚠️Пожалуйста, подпишитесь на <a href="${targetChannelURL}">канал</a> для продолжения`, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: 'Подписаться', url: targetChannelURL }]
+                        ]
+                    }
+                });
                 return;
             }
 
             if (adsData[chatId].photos && adsData[chatId].message) {
-                const adId = await dbManager.saveADtoDB(adsData[chatId].data, adsData[chatId].photoURLs);
-                const channelMessageIds = await postADtoChannel(adsData[chatId], chatId, targetChannel);
-                // await dbManager.checkForNewAds(bot); // Отправка уведомлений об обяъвлении сразу после публикации
-                bot.answerCallbackQuery(callbackQuery.id, {text: '✅ Объявление успешно опубликовано', show_alert: false});
+                const adId = await dbManager.saveADtoDB(adsData[chatId].data, adsData[chatId].photoURLs, targetChannel);
 
-                await dbManager.updateADpostedData(adId, channelMessageIds, targetChannel);
+                // Отправляем администратору
+                await sendToModerate(adsData[chatId], chatId, adId, userId, username);
+                await bot.sendMessage(chatId, '⏳ Ваше объявление находится на модерации...');
+                bot.answerCallbackQuery(callbackQuery.id, { text: '⏳ Объявление отправлено на модерацию', show_alert: false });
                 await bot.deleteMessage(chatId, messageId);
             }
-        } else if (callbackData === 'add_photo') {
+        } /* else if (callbackData.startsWith('approve_ad')) {
+            const parts = callbackData.split('_');
+            const chatIdToPost = parts[2];
+            const adId = parts[3];
+            console.log('Callback Data:', callbackData);
+            const channelMessageIds = await postADtoChannel(adId, chatIdToPost);
+            await bot.answerCallbackQuery(callbackQuery.id, { text: '✅ Объявление подтверждено и опубликовано', show_alert: false });
+            await dbManager.updateADpostedData(adId, channelMessageIds);
+
+        } else if (callbackData.startsWith('reject_ad')) {
+            const parts = callbackData.split('_');
+            const chatIdToReject = parts[2];
+            const adId = parts[3];
+            bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Объявление отклонено', show_alert: false });
+            await bot.sendMessage(chatIdToReject, '❌ Ваше объявление было отклонено модератором.');
+
+            // Опционально: деактивировать или удалить объявление из базы
+            await dbManager.updateAd(adId, { is_active: false });
+
+        } */ else if (callbackData === 'add_photo') {
             if (adsData[chatId].photos && adsData[chatId].message) {
                 await bot.sendMessage(chatId, `⬆️ Можете отправить еще ${currentPhotosCount} фотографий`);
             }
 
         } else if (callbackData === 'receive_notification') {
+            const chatMember = await bot.getChatMember(targetChannel, userId); // Проверка подписки на канал
+            const targetChannelURL = `https://t.me/${targetChannel.replace('@', '')}`;
+            if (!['member', 'administrator', 'creator'].includes(chatMember.status)) {
+                bot.sendMessage(chatId, `⚠️Пожалуйста, подпишитесь на <a href="${targetChannelURL}">канал</a> для продолжения`, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: 'Подписаться', url: targetChannelURL }]
+                        ]
+                    }
+                });
+                return;
+            }
+
             const searchCriteriaID = await dbManager.saveSearchCritireaToDB(adsData[chatId].data);
             bot.answerCallbackQuery(callbackQuery.id, {text: '💾 Поиск сохранен', show_alert: false});
             bot.deleteMessage(chatId, messageId);
@@ -156,7 +240,7 @@ bot.on('callback_query', async (callbackQuery) => {
 `;
 
             const webAppUrlSC = `https://${config.DOMAIN}/autosearch?chat_id=${chatId}`;
-            const caption = `🔍 Поиск ${searchCriteriaID} сохранен!\n\n\`${searchText}\`\n🔻Управление поисками`;
+            const caption = `🔍 Поиск сохранен!\n\n\`${searchText}\``;
             const inlineKeyboard = {
                 reply_markup: {
                     inline_keyboard: [
@@ -409,22 +493,57 @@ app.listen(PORT, () => {
     logger.info(`Server started on PORT ${PORT} at ${new Date().toLocaleString()}`);
   });
 
+// Функция для отправки объявления модератору
+async function sendToModerate(ad, chatId, adId, userId, username) {
+    const mediaGroup = await createMediaGroup(ad);
+    await bot.sendMediaGroup(config.MODERATOR_ID, mediaGroup);
+
+    const moderationMessage = `🔍 Новое объявление от пользователя @${username} ID:${userId}`;
+    const inlineKeyboard = {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '✅ Подтвердить', switch_inline_query_current_chat: `/approve_ad_${chatId}_${adId}` }],
+                [{ text: '❌ Отклонить', switch_inline_query_current_chat: `/reject_ad_${chatId}_${adId}` }]
+            ]
+        }
+    };
+
+    await bot.sendMessage(config.MODERATOR_ID, moderationMessage, { parse_mode: 'Markdown', ...inlineKeyboard });
+}
+
 // Функция для публикации
-async function postADtoChannel(ad, chatId, targetChannel) {
+async function postADtoChannel(adId, chatId) {
+    const ad = await getAdDataFromDB(adId);
+    const mediaGroup = await createMediaGroup(ad);
+    const messageOnChannel = await bot.sendMediaGroup(ad.data.tg_channel, mediaGroup);
+    const messageIds = messageOnChannel.map(message => message.message_id);
+    const messageLink = `https://t.me/${ad.data.tg_channel.replace('@', '')}/${messageIds[0]}`;
+
+    const caption = `✅ [Объявление](${messageLink}) успешно опубликовано!`;
+
+    const webAppUrlADS = `https://${config.DOMAIN}/ads?chat_id=${chatId}`;
+    const inlineKeyboard = {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '📰 Мои объявления', web_app: { url: webAppUrlADS} }]
+            ]
+        }
+    };
+
+    await bot.sendMessage(chatId, caption, { parse_mode: 'Markdown', ...inlineKeyboard });
+    
+    console.log(`Объявление ${messageIds[0]} опубликовано на канале`);
+    return { messageIds, messageLink };
+}
+
+// Функция для публикации
+/*async function postADtoChannel(ad, chatId, targetChannel) {
     const mediaGroup = await createMediaGroup(ad);
     const messageOnChannel = await bot.sendMediaGroup(targetChannel, mediaGroup);
     const messageIds = messageOnChannel.map(message => message.message_id);
     const messageLink = `https://t.me/${targetChannel.replace('@', '')}/${messageIds[0]}`;
 
     const caption = `🎉 Ваше [объявление](${messageLink}) успешно опубликовано!\n🏠После сдачи жилья вы можете удалить объявление из канала ⤵️`;
-
-    /*const inlineKeyboard = {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: '🗑️Удалить объявление', callback_data: `delete_ad_${JSON.stringify(messageIds)}` }]
-            ]
-        }
-    };*/
 
     const webAppUrlADS = `https://${config.DOMAIN}/ads?chat_id=${chatId}`;
     const inlineKeyboard = {
@@ -439,7 +558,7 @@ async function postADtoChannel(ad, chatId, targetChannel) {
     
     console.log(`Объявление ${messageIds[0]} опубликовано на канале`);
     return messageIds;
-}
+}*/
 
 // Функция для согласования публикации (до 10 фотографий)
 async function approvePhotoAD(ad, chatId) {
@@ -451,7 +570,7 @@ async function approvePhotoAD(ad, chatId) {
     await bot.sendMessage(chatId, `⬆️ Вы можете добавить еще ${currentPhotosCount} фотографий или опубликовать объявление`, {
             reply_markup: {
               inline_keyboard: [
-                [{ text: '✅Опубликовать', callback_data: 'approved' }, { text: '↩️Добавить фото', callback_data: 'add_photo' }],
+                [{ text: '✅Опубликовать', callback_data: 'send_to_moderate' }, { text: '↩️Добавить фото', callback_data: 'add_photo' }],
               ],
             },
           });
@@ -464,10 +583,10 @@ async function approveAD(ad, chatId) {
 
     await bot.sendMediaGroup(chatId, mediaGroup);
 
-    await bot.sendMessage(chatId, 'Нажмите "Опубликовать" для отправки объявления на канал', {
+    await bot.sendMessage(chatId, 'Нажмите "Опубликовать" для публикации объявления на канале', {
             reply_markup: {
               inline_keyboard: [
-                [{ text: '✅Опубликовать', callback_data: 'approved' }],
+                [{ text: '✅Опубликовать', callback_data: 'send_to_moderate' }],
               ],
             },
           });
@@ -486,6 +605,41 @@ async function createMediaGroup(ad, includeCaption = true) {
         caption: includeCaption && index === 0 ? trimmedMessage : '',
         parse_mode: 'Markdown'
     }));
+}
+
+// Функция для получения данных объявления из БД
+async function getAdDataFromDB(adId) {
+    const ad = await dbManager.getAdById(adId);
+    const roomTypeText = ad.room_type === 'room' ? '' : ad.room_type === 'bed_space' ? ' (койко-место)' : '';
+    const roomLocationText = ad.room_location === 'apartment' ? '' :
+                             ad.room_location === 'hostel' ? 'в хостеле' :
+                             ad.room_location === 'hotel' ? 'в гостинице' : '';
+
+    const message = `
+🏠 *Сдается* ${ad.house_type === 'apartment' ? ad.rooms + '-комн.квартира' : ad.house_type === 'room' ? 'комната' + roomTypeText + (roomLocationText ? ' ' + roomLocationText : '') : 'дом'} ${ad.duration === 'long_time' ? 'на длительный срок' : 'посуточно'}, ${ad.area} м²${ad.floor_current && ad.floor_total ? `, ${ad.floor_current}/${ad.floor_total} этаж` : ''}${ad.bed_capacity ? ', спальных мест - ' + ad.bed_capacity : ''}
+*Адрес:* г.${ad.city}, ${ad.district} р-н, ${ad.microdistrict ? ad.microdistrict + ', ' : ''} ${ad.address}
+*Сдает:* ${ad.author === 'owner' ? 'собственник' : 'посредник'}
+*Цена:* ${ad.price} ₸
+*Контакты:* ${ad.phone} ${[ad.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${ad.phone})` : '', ad.tg_username ? `[Telegram](https://t.me/${ad.tg_username})` : ''].filter(Boolean).join(' ')}
+🛋️ *Удобства*: ${[
+        ad.toilet ? ad.toilet : '',
+        ad.bathroom ? ad.bathroom : '',
+        ad.furniture ? ad.furniture : '',
+        ad.facilities ? ad.facilities : ''
+    ].filter(Boolean).join(', ')}
+📜 *Правила заселения*: ${[
+        ad.rental_options ? ad.rental_options : ''
+    ].filter(Boolean).join(', ')}
+📝 *Описание*:
+${ad.description ? ad.description : ''}
+`;
+
+    return {
+        data: ad,
+        message: message.trim(),
+        photos: ad.photos || [],
+        photoURLs: ad.photoURLs || []
+    };
 }
 
 async function savePhotoIDsToDB(chatId, fileId) {

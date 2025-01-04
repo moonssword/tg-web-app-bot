@@ -4,7 +4,7 @@ const config = require('./config');
 const pool = new Pool(config.DB_CONFIG);
 
 // Функция для сохранения данных в базу
-async function saveADtoDB(data, photoUrls) {
+async function saveADtoDB(data, photoUrls, targetChannel) {
     const userId = data.user.id;
     const source = 'tg';
 
@@ -89,11 +89,11 @@ async function saveADtoDB(data, photoUrls) {
             house_type, microdistrict, phone, price, rooms, 
             furniture, facilities, rental_options, city, description, 
             deposit, deposit_value, author, address, area, currency,
-            toilet, bathroom, photos, room_type, room_location, bed_capacity, source
+            toilet, bathroom, photos, room_type, room_location, bed_capacity, source, tg_channel
         ) 
         VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, 
-            $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
+            $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30
         )
         RETURNING id;
     `;
@@ -102,7 +102,7 @@ async function saveADtoDB(data, photoUrls) {
         userId, dbUserId, district, duration, floor_current, floor_total, house_type, 
         microdistrict, phone, price, rooms, furniture, facilities, 
         rental_options, city, description, deposit, deposit_value, 
-        author, address, area, currency, toilet, bathroom, jsonPhotos, room_type, room_location, bed_capacity, source
+        author, address, area, currency, toilet, bathroom, jsonPhotos, room_type, room_location, bed_capacity, source, targetChannel
     ];
 
     try {
@@ -219,13 +219,13 @@ async function saveSearchCritireaToDB(data) {
 }
 
 // Обновление даты публикации
-async function updateADpostedData(adId, messageIds, targetChannel) {
+async function updateADpostedData(adId, messageIds) {
     const query = `
         UPDATE ads 
-        SET tg_posted_date = CURRENT_TIMESTAMP, is_posted = TRUE, message_id = $2, tg_channel = $3
+        SET tg_posted_date = CURRENT_TIMESTAMP, is_posted = TRUE, message_id = $2
         WHERE id = $1;
     `;
-    const values = [adId, messageIds, targetChannel];
+    const values = [adId, messageIds];
 
     try {
         await pool.query(query, values);
@@ -348,13 +348,15 @@ async function checkForNewAds(bot) {
                     const matches = await pool.query(`
                     SELECT * FROM ads 
                     WHERE city = $1
-                    AND (district = $2 OR $2 = '')
+                    AND (district = $2 OR $2 = '' OR district = '' OR district IS NULL)
                     AND (microdistrict = $3 OR $3 = '' OR microdistrict = '' OR microdistrict IS NULL)
                     AND is_posted = true
                     AND is_active = true
                     AND house_type = $4
                     AND (rooms = $5 OR $5 IS NULL AND rooms IS NULL)
                     AND price BETWEEN $6 AND $7
+                    AND (posted_at >= NOW() - INTERVAL '1 month' OR tg_posted_date >= NOW() - INTERVAL '1 month')
+                    LIMIT 10
                     `, [
                         searchCriteria.city, 
                         searchCriteria.district,
@@ -367,7 +369,7 @@ async function checkForNewAds(bot) {
 
                     // Если найдены подходящие объявления
                     if (matches.rows.length > 0) {
-                        let messageText = '❗Появились новые подходящие объявления:\n\n';
+                        let messageText = '❗*Появились новые подходящие объявления*\n\n';
                         const notifiedAds = await pool.query(`
                             SELECT ad_id FROM user_notifications 
                             WHERE user_id = $1
@@ -377,25 +379,35 @@ async function checkForNewAds(bot) {
 
                         for (let ad of matches.rows) {
                             if (!notifiedAdIds.has(ad.id)) {
-                                const city = ad.city;
-                                const targetChannel = config.cityChannels[city];
-                                const adLink = `https://t.me/${targetChannel.replace('@', '')}/${ad.message_id[0]}`;
-                                messageText += `🔹[Объявление №${ad.id}](${adLink})\n`;
-
+                                const roomLocationText = ad.room_location === 'apartment' ? '' :
+                                                         ad.room_location === 'hostel' ? 'в хостеле' :
+                                                         ad.room_location === 'hotel' ? 'в гостинице' : '';
+                        
+                                const adDescription = `${ad.house_type === 'apartment' ? ad.rooms + '-комн.квартира' : ad.house_type === 'room' ? 'комната' + (roomLocationText ? ' ' + roomLocationText : '') : 'дом'} ${ad.duration === 'long_time' ? 'на длительный срок' : 'посуточно'},\nг.${ad.city}, ${ad.district} р-н, ${ad.microdistrict ? ad.microdistrict + ', ' : ''}${ad.address ? ad.address + ', ' : ''}${ad.price} ₸`;
+                        
+                                const adLink = `https://t.me/${ad.tg_channel.replace('@', '')}/${ad.message_id[0]}`;
+                        
+                                messageText += `➖*Объявление ID${ad.id}*\n[${adDescription}](${adLink})\n\n`;
+                        
                                 // Сохраняем уведомление в базе данных
                                 await pool.query(`
                                     INSERT INTO user_notifications (user_id, ad_id) 
                                     VALUES ($1, $2)
                                 `, [user.user_id, ad.id]);
                             }
-                        }
+                        }                        
 
-                        if (messageText !== '❗Появились новые подходящие объявления:\n\n') {
+                        if (messageText !== '❗*Появились новые подходящие объявления*\n\n') {
                             // Отправляем уведомление пользователю
-                            await bot.sendMessage(user.tg_user_id, messageText, {
-                                parse_mode: 'Markdown',
-                                disable_web_page_preview: true
-                            });                        
+                            const webAppUrlSC = `https://${config.DOMAIN}/autosearch?chat_id=${user.tg_user_id}`;
+                            const inlineKeyboard = {
+                                reply_markup: {
+                                    inline_keyboard: [
+                                        [{ text: '🔖Мои поиски', web_app: { url: webAppUrlSC} }]
+                                    ]
+                                }
+                            };
+                            await bot.sendMessage(user.tg_user_id, messageText, { parse_mode: 'Markdown', ...inlineKeyboard, disable_web_page_preview: true });
 
                             // Обновляем дату последнего уведомления
                             const updateCriteriaQuery = `
@@ -406,6 +418,8 @@ async function checkForNewAds(bot) {
                             await pool.query(updateCriteriaQuery, [user.user_id]);
                         }
                     }
+
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                 }
         }
     } catch (err) {
@@ -522,6 +536,27 @@ async function getAdsByUserId(userId) {
     }
 }
 
+// Функция для получения объявления по id
+async function getAdById(adId) {
+    const query = `
+        SELECT *
+        FROM ads 
+        WHERE id = $1;
+    `;
+    const values = [adId];
+
+    try {
+        const result = await pool.query(query, values);
+        if (result.rowCount === 0) {
+            throw new Error('Ad not found');
+        }
+        return result.rows[0];
+    } catch (err) {
+        console.error('Error fetching ad by id:', err);
+        throw new Error('Error fetching ad');
+    }
+}
+
 // Функция для обновления записи в таблице ads
 async function updateAd(adId, updates) {
     if (!adId) {
@@ -568,6 +603,7 @@ const dbManager = {
     updateSearchCriteria,
     getAdsByUserId,
     updateAd,
+    getAdById,
   };
   
   module.exports = dbManager;
