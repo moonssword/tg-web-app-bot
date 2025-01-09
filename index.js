@@ -136,7 +136,7 @@ bot.on('message', async (msg) => {
                 clearTimeout(photoTimers[chatId]);
             }
 
-            savePhotoIDsToDB(chatId, fileId);
+            adsData[chatId].photoURLs.push(fileId);
 
             // Устанавливаем новый таймер
             photoTimers[chatId] = setTimeout(() => {
@@ -192,26 +192,7 @@ bot.on('callback_query', async (callbackQuery) => {
                 bot.answerCallbackQuery(callbackQuery.id, { text: '⏳ Объявление отправлено на модерацию', show_alert: false });
                 await bot.deleteMessage(chatId, messageId);
             }
-        } /* else if (callbackData.startsWith('approve_ad')) {
-            const parts = callbackData.split('_');
-            const chatIdToPost = parts[2];
-            const adId = parts[3];
-            console.log('Callback Data:', callbackData);
-            const channelMessageIds = await postADtoChannel(adId, chatIdToPost);
-            await bot.answerCallbackQuery(callbackQuery.id, { text: '✅ Объявление подтверждено и опубликовано', show_alert: false });
-            await dbManager.updateADpostedData(adId, channelMessageIds);
-
-        } else if (callbackData.startsWith('reject_ad')) {
-            const parts = callbackData.split('_');
-            const chatIdToReject = parts[2];
-            const adId = parts[3];
-            bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Объявление отклонено', show_alert: false });
-            await bot.sendMessage(chatIdToReject, '❌ Ваше объявление было отклонено модератором.');
-
-            // Опционально: деактивировать или удалить объявление из базы
-            await dbManager.updateAd(adId, { is_active: false });
-
-        } */ else if (callbackData === 'add_photo') {
+        } else if (callbackData === 'add_photo') {
             if (adsData[chatId].photos && adsData[chatId].message) {
                 await bot.sendMessage(chatId, `⬆️ Можете отправить еще ${currentPhotosCount} фотографий`);
             }
@@ -232,7 +213,7 @@ bot.on('callback_query', async (callbackQuery) => {
             }
 
             const searchCriteriaID = await dbManager.saveSearchCritireaToDB(adsData[chatId].data);
-            bot.answerCallbackQuery(callbackQuery.id, {text: '💾 Поиск сохранен', show_alert: false});
+            bot.answerCallbackQuery(callbackQuery.id, {text: '💾 Настройки фильтров сохранены', show_alert: false});
             bot.deleteMessage(chatId, messageId);
 
             const searchText = `Сниму ${adsData[chatId].data.house_type === 'apartment' ? adsData[chatId].data.rooms + '-комн.квартиру' : adsData[chatId].data.house_type === 'room' ? 'комнату' : 'дом'} ${adsData[chatId].data.duration === 'long_time' ? 'на длительный срок' : 'посуточно'} в г.${adsData[chatId].data.city}${adsData[chatId].data.district ? ', ' + adsData[chatId].data.district + ' р-н'  : ''}${adsData[chatId].data.microdistrict ? ', ' + adsData[chatId].data.microdistrict  : ''}
@@ -240,11 +221,11 @@ bot.on('callback_query', async (callbackQuery) => {
 `;
 
             const webAppUrlSC = `https://${config.DOMAIN}/autosearch?chat_id=${chatId}`;
-            const caption = `🔍 Поиск сохранен!\n\n\`${searchText}\``;
+            const caption = `💾 Настройки фильтров сохранены. Мы сообщим о новых объявлениях.\n\n\`${searchText}\``;
             const inlineKeyboard = {
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: '🔖Мои поиски', web_app: { url: webAppUrlSC} }]
+                        [{ text: '🔖 Поиски', web_app: { url: webAppUrlSC} }]
                     ]
                 }
             };
@@ -307,7 +288,7 @@ app.post('/api/web-data', async (req, res) => {
 *Сдает:* ${data.author === 'owner' ? 'собственник': 'посредник'}
 *Цена:* ${data.price} ₸
 *Депозит:* ${data.deposit ? `${data.deposit_value}%` : 'нет'}
-*Контакты:* ${data.call ? data.phone : ''} ${[ data.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${data.phone})` : '', data.tg_username ? `[Telegram](https://t.me/${data.tg_username})` : ''].filter(Boolean).join(' ')}
+*Контакты:* ${data.call ? data.phone : ''} ${[ data.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${data.phone})` : '', data.telegram ? `[Telegram](https://t.me/${data.tg_username ? data.tg_username : data.user.username})` : ''].filter(Boolean).join(' ')}
 🛋️ *Удобства*: ${[
     data.fridge ? 'холодильник' : '',
     data.washing_machine ? 'стиральная машина' : '',
@@ -607,7 +588,7 @@ async function createMediaGroup(ad, includeCaption = true) {
     }));
 }
 
-// Функция для получения данных объявления из БД
+// Функция для получения данных объявления из БД и формирования сообщения
 async function getAdDataFromDB(adId) {
     const ad = await dbManager.getAdById(adId);
     const roomTypeText = ad.room_type === 'room' ? '' : ad.room_type === 'bed_space' ? ' (койко-место)' : '';
@@ -620,7 +601,7 @@ async function getAdDataFromDB(adId) {
 *Адрес:* г.${ad.city}, ${ad.district} р-н, ${ad.microdistrict ? ad.microdistrict + ', ' : ''} ${ad.address}
 *Сдает:* ${ad.author === 'owner' ? 'собственник' : 'посредник'}
 *Цена:* ${ad.price} ₸
-*Контакты:* ${ad.phone} ${[ad.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${ad.phone})` : '', ad.tg_username ? `[Telegram](https://t.me/${ad.tg_username})` : ''].filter(Boolean).join(' ')}
+*Контакты:* ${ad.phone} ${[ad.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${ad.phone})` : '', ad.telegram && ad.tg_username ? `[Telegram](https://t.me/${ad.tg_username})` : ''].filter(Boolean).join(' ')}
 🛋️ *Удобства*: ${[
         ad.toilet ? ad.toilet : '',
         ad.bathroom ? ad.bathroom : '',
@@ -640,12 +621,6 @@ ${ad.description ? ad.description : ''}
         photos: ad.photos || [],
         photoURLs: ad.photoURLs || []
     };
-}
-
-async function savePhotoIDsToDB(chatId, fileId) {
-
-        //const photoUrl = await getPhotoUrl(fileId);
-        adsData[chatId].photoURLs.push(fileId);
 }
 
 async function getPhotoUrl(fileId) {
