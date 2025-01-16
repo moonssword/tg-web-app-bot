@@ -355,7 +355,8 @@ async function checkForNewAds(bot) {
                     AND house_type = $4
                     AND (rooms = $5 OR $5 IS NULL AND rooms IS NULL)
                     AND price BETWEEN $6 AND $7
-                    AND (posted_at >= NOW() - INTERVAL '1 month' OR tg_posted_date >= NOW() - INTERVAL '1 month')
+                    -- AND (posted_at >= NOW() - INTERVAL '1 month' OR tg_posted_date >= NOW() - INTERVAL '1 month')
+                    AND (posted_at >= $8 OR tg_posted_date >= $8)
                     LIMIT 10
                     `, [
                         searchCriteria.city, 
@@ -364,7 +365,8 @@ async function checkForNewAds(bot) {
                         searchCriteria.house_type,
                         searchCriteria.rooms,
                         searchCriteria.price_min,
-                        searchCriteria.price_max
+                        searchCriteria.price_max,
+                        searchCriteria.created_at
                     ]);
 
                     // Если найдены подходящие объявления
@@ -387,7 +389,7 @@ async function checkForNewAds(bot) {
                         
                                 const adLink = `https://t.me/${ad.tg_channel.replace('@', '')}/${ad.message_id[0]}`;
                         
-                                messageText += `➖*Объявление ID${ad.id}*\n[${adDescription}](${adLink})\n\n`;
+                                messageText += `🚩 *Объявление #${ad.id}*\n[${adDescription}](${adLink})\n\n`;
                         
                                 // Сохраняем уведомление в базе данных
                                 await pool.query(`
@@ -399,11 +401,11 @@ async function checkForNewAds(bot) {
 
                         if (messageText !== '❗*Появились новые подходящие объявления*\n\n') {
                             // Отправляем уведомление пользователю
-                            const webAppUrlSC = `https://${config.DOMAIN}/autosearch?chat_id=${user.tg_user_id}`;
+                            const webAppUrlSC = `https://${config.DOMAIN}/autosearch`;
                             const inlineKeyboard = {
                                 reply_markup: {
                                     inline_keyboard: [
-                                        [{ text: '🔖Мои поиски', web_app: { url: webAppUrlSC} }]
+                                        [{ text: '🔖Сохраненные поиски', web_app: { url: webAppUrlSC} }]
                                     ]
                                 }
                             };
@@ -519,9 +521,7 @@ async function updateSearchCriteria(criteriaId, updates) {
 // Функция для получения объявлений по tg_user_id
 async function getAdsByUserId(userId) {
     const query = `
-        SELECT 
-            id, user_id, tg_user_id, tg_channel, price, house_type, duration, address,
-            rooms, city, district, microdistrict, phone, message_id, is_active
+        SELECT *
         FROM ads 
         WHERE tg_user_id = $1 AND is_active = TRUE;
     `;
@@ -591,6 +591,41 @@ async function updateAd(adId, updates) {
     }
 }
 
+// Функция для поиска объявлений
+async function getAdsByParams(params) {
+    const query = `
+        SELECT * FROM ads 
+        WHERE city = $1
+        AND (district = $2 OR $2 = '' OR district = '' OR district IS NULL)
+        AND (microdistrict = $3 OR $3 = '' OR microdistrict = '' OR microdistrict IS NULL)
+        AND is_posted = true
+        AND is_active = true
+        AND house_type = $4
+        AND (rooms = $5 OR $5 IS NULL AND rooms IS NULL)
+        AND price BETWEEN $6 AND $7
+        AND (posted_at >= NOW() - INTERVAL '1 month' OR tg_posted_date >= NOW() - INTERVAL '1 month')
+        LIMIT 10
+    `;
+
+    const values = [
+        params.city,
+        params.district,
+        params.microdistrict,
+        params.house_type,
+        params.rooms,
+        params.price_min,
+        params.price_max
+    ];
+
+    try {
+        const result = await pool.query(query, values);
+        return result.rows;
+    } catch (err) {
+        console.error('Error in search:', err);
+        throw new Error('Error fetching ads');
+    }
+}
+
 const dbManager = {
     createNewUser,
     saveADtoDB,
@@ -604,6 +639,7 @@ const dbManager = {
     getAdsByUserId,
     updateAd,
     getAdById,
+    getAdsByParams,
   };
   
   module.exports = dbManager;

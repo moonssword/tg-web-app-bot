@@ -5,3 +5,4 @@
 .dockerignore
 docker-compose.yml
 index copy.js
+bucket.js
