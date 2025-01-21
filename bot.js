@@ -1,9 +1,11 @@
 const TelegramBot = require('node-telegram-bot-api');
 const config = require('./config');
 const dbManager = require('./db-manager');
+const { uploadToS3 } = require('./s3');
 const logger = require('./logger');
 const { startNotificationTask } = require('./notifications');
-
+const axios = require('axios');
+const fs = require('fs');
 
 const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, {polling: true});
 
@@ -45,9 +47,10 @@ bot.on('message', async (msg) => {
                 const adId = parts[3];
 
                 try {
-                    const { messageIds, messageLink } = await postADtoChannel(adId, chatIdToPost);
+                    const { messageIds, messageLink, photoFileIDs } = await postADtoChannel(adId, chatIdToPost);
                     await bot.sendMessage(chatId, `✅ [Объявление](${messageLink}) подтверждено и опубликовано`, { parse_mode: 'Markdown' });
                     await dbManager.updateADpostedData(adId, messageIds);
+                    savePhotosByFileIDs(adId, photoFileIDs);
                 } catch (error) {
                     console.error('Ошибка при публикации объявления:', error);
                     await bot.sendMessage(chatId, '❗ Произошла ошибка при публикации объявления.');
@@ -73,14 +76,14 @@ bot.on('message', async (msg) => {
                 }
             }
         } else if (text === '/test') {
-            await bot.sendMessage(chatId, 'Open', {
+/*             await bot.sendMessage(chatId, 'Open', {
                 reply_markup: {
                     inline_keyboard: [
                         [{ text: 'Main', web_app: { url: `https://${config.DOMAIN}`} }],
-                        [{ text: 'Ads', web_app: { url: `https://${config.DOMAIN}/ads`} }]
+                        [{ text: 'SC', web_app: { url: `https://${config.DOMAIN}/autosearch`} }]
                     ]
                 }
-            });
+            }); */
         }
 
 
@@ -235,6 +238,7 @@ async function postADtoChannel(adId, chatId) {
     const messageOnChannel = await bot.sendMediaGroup(ad.data.tg_channel, mediaGroup);
     const messageIds = messageOnChannel.map(message => message.message_id);
     const messageLink = `https://t.me/${ad.data.tg_channel.replace('@', '')}/${messageIds[0]}`;
+    const photoFileIDs = ad.photos;
 
     const caption = `✅ [Объявление](${messageLink}) успешно опубликовано!`;
 
@@ -250,7 +254,7 @@ async function postADtoChannel(adId, chatId) {
     await bot.sendMessage(chatId, caption, { parse_mode: 'Markdown', ...inlineKeyboard });
     
     console.log(`Объявление ${messageIds[0]} опубликовано на канале`);
-    return { messageIds, messageLink };
+    return { messageIds, messageLink, photoFileIDs };
 }
 
 // Функция для согласования публикации (до 10 фотографий)
@@ -307,13 +311,14 @@ async function getAdDataFromDB(adId) {
     const roomLocationText = ad.room_location === 'apartment' ? '' :
                              ad.room_location === 'hostel' ? 'в хостеле' :
                              ad.room_location === 'hotel' ? 'в гостинице' : '';
+    const formattedPhone = phone => phone.replace(/[^0-9]/g, '').replace(/^8/, '7');
 
     const message = `
 🏠 *Сдается* ${ad.house_type === 'apartment' ? ad.rooms + '-комн.квартира' : ad.house_type === 'room' ? 'комната' + roomTypeText + (roomLocationText ? ' ' + roomLocationText : '') : 'дом'} ${ad.duration === 'long_time' ? 'на длительный срок' : 'посуточно'}, ${ad.area} м²${ad.floor_current && ad.floor_total ? `, ${ad.floor_current}/${ad.floor_total} этаж` : ''}${ad.bed_capacity ? ', спальных мест - ' + ad.bed_capacity : ''}
 *Адрес:* г.${ad.city}, ${ad.district} р-н, ${ad.microdistrict ? ad.microdistrict + ', ' : ''} ${ad.address}
 *Сдает:* ${ad.author === 'owner' ? 'собственник' : 'посредник'}
 *Цена:* ${ad.price} ₸
-*Контакты:* ${ad.phone} ${[ad.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${ad.phone})` : '', ad.telegram && ad.tg_username ? `[Telegram](https://t.me/${ad.tg_username})` : ''].filter(Boolean).join(' ')}
+*Контакты:* ${ad.phone} ${[ad.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${ad.phone.replace(/[^0-9]/g, '').replace(/^8/, '7')})` : '', ad.telegram && ad.tg_username ? `[Telegram](https://t.me/${ad.tg_username})` : ''].filter(Boolean).join(' ')}
 🛋️ *Удобства*: ${[
         ad.toilet ? ad.toilet : '',
         ad.bathroom ? ad.bathroom : '',
@@ -335,9 +340,36 @@ ${ad.description ? ad.description : ''}
     };
 }
 
-async function getPhotoUrl(fileId) {
-    const file = await bot.getFile(fileId);
-    return `https://api.telegram.org/file/bot${config.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+async function savePhotosByFileIDs(adId, photoFileIDs) {
+    const photoUrls = [];
+
+    for (const fileID of photoFileIDs) {
+        const file = await bot.getFile(fileID);
+        const filePath = file.file_path;
+
+        const localFilePath = `./tmp/${fileID}.jpg`;
+
+        const fileUrl = `https://api.telegram.org/file/bot${bot.token}/${filePath}`;
+        const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+
+        if (response.status !== 200) {
+            throw new Error(`Ошибка загрузки файла с сервера Telegram: ${response.statusText}`);
+        }
+
+        const buffer = Buffer.from(response.data);
+
+        await fs.promises.writeFile(localFilePath, buffer);
+
+        const fileName = `${fileID}.jpg`;
+        await uploadToS3(localFilePath, fileName);
+
+        const fileLink = `${config.S3_ENDPOINT}/${config.S3_BUCKET}/${fileName}`;
+        photoUrls.push(fileLink);
+
+        await fs.promises.unlink(localFilePath);
+    }
+
+    await dbManager.updateAd(adId, { converted_photos: JSON.stringify(photoUrls) });
 }
 
 module.exports = { bot, adsData };

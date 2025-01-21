@@ -16,5 +16,9 @@ module.exports = {
         port: process.env.DB_PORT,
     },
     cityChannels: JSON.parse(process.env.CITY_CHANNELS || '{}'),
-    CHECK_INTERVAL:process.env.CHECK_INTERVAL // '10 seconds', '5 minutes', '24 hours', '7 days', '1 month', '1 year','1 day 3 hours 15 minutes'
+    CHECK_INTERVAL:process.env.CHECK_INTERVAL, // '10 seconds', '5 minutes', '24 hours', '7 days', '1 month', '1 year','1 day 3 hours 15 minutes'
+    S3_ENDPOINT: process.env.S3_ENDPOINT,
+    S3_BUCKET: process.env.S3_BUCKET,
+    S3_ACCESS_KEY: process.env.S3_ACCESS_KEY,
+    S3_SECRET_KEY: process.env.S3_SECRET_KEY
 };

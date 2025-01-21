@@ -389,7 +389,7 @@ async function checkForNewAds(bot) {
                         
                                 const adLink = `https://t.me/${ad.tg_channel.replace('@', '')}/${ad.message_id[0]}`;
                         
-                                messageText += `🚩 *Объявление #${ad.id}*\n[${adDescription}](${adLink})\n\n`;
+                                messageText += `- [${adDescription}](${adLink})\n\n`;
                         
                                 // Сохраняем уведомление в базе данных
                                 await pool.query(`
@@ -601,10 +601,11 @@ async function getAdsByParams(params) {
         AND is_posted = true
         AND is_active = true
         AND house_type = $4
-        AND (rooms = $5 OR $5 IS NULL AND rooms IS NULL)
-        AND price BETWEEN $6 AND $7
+        AND duration = $5
+        AND (rooms = $6 OR $5 IS NULL AND rooms IS NULL)
+        AND price BETWEEN $7 AND $8
         AND (posted_at >= NOW() - INTERVAL '1 month' OR tg_posted_date >= NOW() - INTERVAL '1 month')
-        LIMIT 10
+        LIMIT 20
     `;
 
     const values = [
@@ -612,6 +613,7 @@ async function getAdsByParams(params) {
         params.district,
         params.microdistrict,
         params.house_type,
+        params.duration,
         params.rooms,
         params.price_min,
         params.price_max
