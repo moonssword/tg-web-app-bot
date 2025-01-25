@@ -318,7 +318,7 @@ async function getAdDataFromDB(adId) {
 *Адрес:* г.${ad.city}, ${ad.district} р-н, ${ad.microdistrict ? ad.microdistrict + ', ' : ''} ${ad.address}
 *Сдает:* ${ad.author === 'owner' ? 'собственник' : 'посредник'}
 *Цена:* ${ad.price} ₸
-*Контакты:* ${ad.phone} ${[ad.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${ad.phone.replace(/[^0-9]/g, '').replace(/^8/, '7')})` : '', ad.telegram && ad.tg_username ? `[Telegram](https://t.me/${ad.tg_username})` : ''].filter(Boolean).join(' ')}
+*Контакты:* ${ad.call ? ad.phone : ''} ${[ad.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${ad.phone.replace(/[^0-9]/g, '').replace(/^8/, '7')})` : '', ad.telegram && ad.tg_username ? `[Telegram](https://t.me/${ad.tg_username})` : ''].filter(Boolean).join(' ')}
 🛋️ *Удобства*: ${[
         ad.toilet ? ad.toilet : '',
         ad.bathroom ? ad.bathroom : '',
@@ -363,7 +363,7 @@ async function savePhotosByFileIDs(adId, photoFileIDs) {
         const fileName = `${fileID}.jpg`;
         await uploadToS3(localFilePath, fileName);
 
-        const fileLink = `${config.S3_ENDPOINT}/${config.S3_BUCKET}/${fileName}`;
+        const fileLink = `${config.S3_ENDPOINT}/${config.S3_BUCKET}/tg_images/${fileName}`;
         photoUrls.push(fileLink);
 
         await fs.promises.unlink(localFilePath);

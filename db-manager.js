@@ -37,12 +37,16 @@ async function saveADtoDB(data, photoUrls, targetChannel) {
         sleeping_places, stove, room_type, room_location, tv, bed_linen, towels, hygiene_items,
         wardrobe, washing_machine, wifi, with_child, with_pets,
         city, description, deposit, deposit_value, author, address, area, currency,
-        combined_toilet, bath, bed_capacity, whatsapp, telegram, tg_username
+        combined_toilet, bath, bed_capacity, call, whatsapp, telegram, tg_username
     } = data;
 
     //const photos = JSON.stringify(photoUrls);
     const jsonPhotos = Array.isArray(photoUrls) ? JSON.stringify(photoUrls) : '[]';
 
+    const callValue = call ?? false;
+    const whatsappValue = whatsapp ?? false;
+    const telegramValue = telegram ?? false; 
+    
     const toilet = [
         combined_toilet ? 'совмещенный санузел' : '',
         separate_toilet ? 'раздельный санузел' : ''
@@ -89,11 +93,11 @@ async function saveADtoDB(data, photoUrls, targetChannel) {
             house_type, microdistrict, phone, price, rooms, 
             furniture, facilities, rental_options, city, description, 
             deposit, deposit_value, author, address, area, currency,
-            toilet, bathroom, photos, room_type, room_location, bed_capacity, source, tg_channel, whatsapp, telegram, tg_username
+            toilet, bathroom, photos, room_type, room_location, bed_capacity, source, tg_channel, call, whatsapp, telegram, tg_username
         ) 
         VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, 
-            $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33
+            $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34
         )
         RETURNING id;
     `;
@@ -102,7 +106,7 @@ async function saveADtoDB(data, photoUrls, targetChannel) {
         userId, dbUserId, district, duration, floor_current, floor_total, house_type, 
         microdistrict, phone, price, rooms, furniture, facilities, 
         rental_options, city, description, deposit, deposit_value, 
-        author, address, area, currency, toilet, bathroom, jsonPhotos, room_type, room_location, bed_capacity, source, targetChannel, whatsapp, telegram, tg_username ? tg_username : data.user.username
+        author, address, area, currency, toilet, bathroom, jsonPhotos, room_type, room_location, bed_capacity, source, targetChannel, callValue, whatsappValue, telegramValue, tg_username ? tg_username : data.user.username
     ];
 
     try {
