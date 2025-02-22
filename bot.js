@@ -79,8 +79,7 @@ bot.on('message', async (msg) => {
 /*             await bot.sendMessage(chatId, 'Open', {
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: 'Main', web_app: { url: `https://${config.DOMAIN}`} }],
-                        [{ text: 'SC', web_app: { url: `https://${config.DOMAIN}/autosearch`} }]
+                        [{ text: 'Main', web_app: { url: `https://${config.DOMAIN}`} }, { text: 'test', web_app: { url: `https://hdrezka.ag/`} }],
                     ]
                 }
             }); */
@@ -216,7 +215,7 @@ async function sendToModerate(ad, chatId, adId, userId, username) {
     const mediaGroup = await createMediaGroup(ad);
     await bot.sendMediaGroup(config.MODERATOR_ID, mediaGroup);
 
-    const moderationMessage = `🔍 Новое объявление от пользователя @${username} ID:${userId}`;
+    const moderationMessage = `🔍 Новое объявление от пользователя <b>@${username}</b> ID: <code>${userId}</code>`;
     const inlineKeyboard = {
         reply_markup: {
             inline_keyboard: [
@@ -228,7 +227,7 @@ async function sendToModerate(ad, chatId, adId, userId, username) {
         }
     };    
 
-    await bot.sendMessage(config.MODERATOR_ID, moderationMessage, { parse_mode: 'Markdown', ...inlineKeyboard });
+    await bot.sendMessage(config.MODERATOR_ID, moderationMessage, { parse_mode: 'HTML', ...inlineKeyboard });
 }
 
 // Функция для публикации
