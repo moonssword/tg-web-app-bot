@@ -41,7 +41,7 @@ async function saveADtoDB(data, photoUrls, targetChannel) {
     } = data;
 
     //const photos = JSON.stringify(photoUrls);
-    const jsonPhotos = Array.isArray(photoUrls) ? JSON.stringify(photoUrls) : '[]';
+    const jsonPhotos = Array.isArray(photoUrls) ? JSON.stringify(photoUrls.slice(0, 10)) : '[]';
 
     const callValue = call ?? false;
     const whatsappValue = whatsapp ?? false;

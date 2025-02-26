@@ -317,7 +317,8 @@ async function getAdDataFromDB(adId) {
 *Адрес:* г.${ad.city}, ${ad.district} р-н, ${ad.microdistrict ? ad.microdistrict + ', ' : ''} ${ad.address}
 *Сдает:* ${ad.author === 'owner' ? 'собственник' : 'посредник'}
 *Цена:* ${ad.price} ₸
-*Контакты:* ${ad.call ? ad.phone : ''} ${[ad.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${ad.phone.replace(/[^0-9]/g, '').replace(/^8/, '7')})` : '', ad.telegram && ad.tg_username ? `[Telegram](https://t.me/${ad.tg_username})` : ''].filter(Boolean).join(' ')}
+*Депозит:* ${ad.deposit ? `${ad.deposit_value}%` : 'нет'}
+*Контакты:* ${ad.call ? '+' + ad.phone : ''} ${[ad.whatsapp ? `[WhatsApp](https://api.whatsapp.com/send?phone=${ad.phone.replace(/[^0-9]/g, '').replace(/^8/, '7')})` : '', ad.telegram && ad.tg_username ? `[Telegram](https://t.me/${ad.tg_username})` : ''].filter(Boolean).join(' ')}
 🛋️ *Удобства*: ${[
         ad.toilet ? ad.toilet : '',
         ad.bathroom ? ad.bathroom : '',
